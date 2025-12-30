@@ -10,8 +10,9 @@ import Animated, {
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const HEADER_HEIGHT = 250;
+const HEADER_HEIGHT = 0;
 
 type Props = PropsWithChildren<{
   headerImage: ReactElement;
@@ -23,6 +24,7 @@ export default function ParallaxScrollView({
   headerImage,
   headerBackgroundColor,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const backgroundColor = useThemeColor({}, 'background');
   const colorScheme = useColorScheme() ?? 'light';
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -45,20 +47,24 @@ export default function ParallaxScrollView({
   });
 
   return (
-    <Animated.ScrollView
-      ref={scrollRef}
-      style={{ backgroundColor, flex: 1 }}
-      scrollEventThrottle={16}>
-      <Animated.View
-        style={[
-          styles.header,
-          { backgroundColor: headerBackgroundColor[colorScheme] },
-          headerAnimatedStyle,
-        ]}>
-        {headerImage}
-      </Animated.View>
-      <ThemedView style={styles.content}>{children}</ThemedView>
-    </Animated.ScrollView>
+    <ThemedView style={styles.container}>
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={{ backgroundColor, flex: 1 }}
+        // Keep content below status bar / notch
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+        scrollEventThrottle={16}>
+        <Animated.View
+          style={[
+            styles.header,
+            { backgroundColor: headerBackgroundColor[colorScheme] },
+            headerAnimatedStyle,
+          ]}>
+          {headerImage}
+        </Animated.View>
+        <ThemedView style={styles.content}>{children}</ThemedView>
+      </Animated.ScrollView>
+    </ThemedView>
   );
 }
 
@@ -72,8 +78,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 32,
+    padding: 16,
     gap: 16,
-    overflow: 'hidden',
   },
 });
