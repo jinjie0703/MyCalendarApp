@@ -14,6 +14,7 @@ import * as SQLite from "expo-sqlite";
 import { Calendar } from "react-native-calendars";
 
 import { getLunar } from "chinese-lunar-calendar";
+import { Solar } from "lunar-javascript";
 
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
@@ -48,19 +49,46 @@ export default function CalendarScreen() {
   );
   const [showAlmanac, setShowAlmanac] = useState(true);
 
+  const solarFestivals: Record<string, string> = {
+    "1-1": "元旦",
+    "2-14": "情人节",
+    "3-8": "妇女节",
+    "5-1": "劳动节",
+    "6-1": "儿童节",
+    "10-1": "国庆节",
+    "12-25": "圣诞节",
+  };
+  // lunarMonth and lunarDate are numbers without leading zero
+  const lunarFestivals: Record<string, string> = {
+    "1-1": "春节",
+    "1-15": "元宵节",
+    "5-5": "端午节",
+    "7-7": "七夕",
+    "8-15": "中秋节",
+    "9-9": "重阳节",
+  };
+
   const getLunarDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      const lunar = getLunar(
-        date.getFullYear(),
-        date.getMonth() + 1,
-        date.getDate()
-      );
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+
+      const lunar = getLunar(date.getFullYear(), month, day);
+      const lunarMonth = (lunar as any).lunarMonth as number;
+      const lunarDate = (lunar as any).lunarDate as number;
+
+      const solarKey = `${month}-${day}`;
+      const lunarKey = `${lunarMonth}-${lunarDate}`;
+
+      const festivalLabel =
+        lunarFestivals[lunarKey] || solarFestivals[solarKey] || null;
+
       return {
-        lunarDay: lunar.lunarDay,
-        lunarMonth: lunar.lunarMonthName,
-        isTerm: lunar.solarTerm || null,
-        isFestival: lunar.lunarFestival || lunar.solarFestival || null,
+        lunarDay: String((lunar as any).dateStr || "").replace(/^.+月/, ""),
+        lunarMonth: String(lunarMonth),
+        isTerm: (lunar as any).solarTerm || null,
+        isFestival: festivalLabel,
       };
     } catch (e) {
       return { lunarDay: "", lunarMonth: "", isTerm: null, isFestival: null };
@@ -68,30 +96,32 @@ export default function CalendarScreen() {
   };
 
   const getAlmanacInfo = (dateString: string) => {
-    // 这里可以添加更多黄历信息
-    const info = [];
-    const date = new Date(dateString);
-    const lunar = getLunar(
-      date.getFullYear(),
-      date.getMonth() + 1,
-      date.getDate()
-    );
+    try {
+      const date = new Date(dateString);
+      const solar = Solar.fromYmd(
+        date.getFullYear(),
+        date.getMonth() + 1,
+        date.getDate()
+      );
+      const lunar = solar.getLunar();
 
-    // 添加宜忌信息（示例）
-    const yi = ["嫁娶", "祭祀", "开市", "交易", "立券"];
-    const ji = ["安葬", "作灶", "入殓"];
+      // 标题行：农历冬月初三（乙巳蛇年 戊子月 乙丑日）
+      const title = `农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}  (${lunar.getYearInGanZhi()}${lunar.getYearShengXiao()}年 ${lunar.getMonthInGanZhi()}月 ${lunar.getDayInGanZhi()}日)`;
 
-    info.push(`宜: ${yi.join(" ")}`);
-    info.push(`忌: ${ji.join(" ")}`);
+      const yi = lunar.getDayYi();
+      const ji = lunar.getDayJi();
 
-    // 添加节日信息
-    if (lunar.solarFestival) info.push(`节日: ${lunar.solarFestival}`);
-    if (lunar.lunarFestival) info.push(`农历: ${lunar.lunarFestival}`);
+      // 和你截图类似：宜/忌后面列出条目
+      const yiLine = `宜: ${yi.join(" ")}`;
+      const jiLine = `忌: ${ji.join(" ")}`;
 
-    // 添加节气
-    if (lunar.solarTerm) info.push(`节气: ${lunar.solarTerm}`);
+      // 可选补充：冲煞
+      const chongShaLine = `冲煞: 冲${lunar.getChongDesc()} 煞${lunar.getSha()}`;
 
-    return info.join("\n");
+      return [title, yiLine, jiLine, chongShaLine].join("\n");
+    } catch (e) {
+      return "黄历获取失败";
+    }
   };
 
   const markedDates = useMemo(() => {
@@ -362,11 +392,10 @@ const styles = StyleSheet.create({
     color: "#C0392B",
   },
   almanacText: {
-    fontSize: 13,
-    lineHeight: 18,
-    opacity: 0.85,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.9,
+    padding: 12,
     borderRadius: 10,
     backgroundColor: "rgba(161,206,220,0.15)",
   },
