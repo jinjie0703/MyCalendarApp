@@ -44,10 +44,15 @@ function RootLayoutContent() {
   // 初始化通知服务和订阅
   useEffect(() => {
     const init = async () => {
-      // 初始化通知
-      const hasPermission = await requestNotificationPermission();
-      if (hasPermission) {
-        await scheduleAllEventNotifications();
+      try {
+        // 初始化通知（本地通知在 Expo Go 中可用）
+        const hasPermission = await requestNotificationPermission();
+        if (hasPermission) {
+          await scheduleAllEventNotifications();
+        }
+      } catch (error) {
+        // Expo Go 中可能会有推送通知相关警告，但不影响本地通知
+        console.warn("通知初始化警告:", error);
       }
 
       // 初始化订阅表并同步
@@ -62,34 +67,52 @@ function RootLayoutContent() {
     init();
 
     // 监听通知点击，跳转到对应事件
-    const subscription = addNotificationResponseListener((eventId, date) => {
-      router.push({
-        pathname: "/event/edit",
-        params: { id: eventId, date },
+    let subscription: any;
+    try {
+      subscription = addNotificationResponseListener((eventId, date) => {
+        router.push({
+          pathname: "/event/edit",
+          params: { id: eventId, date },
+        });
       });
-    });
+    } catch (error) {
+      console.warn("通知监听器设置失败:", error);
+    }
 
     return () => {
-      subscription.remove();
+      subscription?.remove?.();
     };
-  }, []);
+  }, [router]);
 
   return (
     <ThemeProvider
       value={effectiveColorScheme === "dark" ? DarkTheme : DefaultTheme}
     >
       <Stack>
-        {/* App root */}
-        <Stack.Screen name="calendar" options={{ headerShown: false }} />
+        {/* 首页重定向 */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+
+        {/* Tab 导航 */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+        {/* 独立页面 */}
         <Stack.Screen name="year" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="subscriptions" options={{ headerShown: false }} />
+        <Stack.Screen name="search" options={{ headerShown: false }} />
 
         {/* Modals */}
         <Stack.Screen
           name="event/edit"
           options={{ presentation: "modal", headerShown: false }}
         />
+        <Stack.Screen
+          name="modal"
+          options={{ presentation: "modal", headerShown: false }}
+        />
+
+        {/* 404 页面 */}
+        <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

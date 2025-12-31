@@ -3,7 +3,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { CalendarEvent, getAllEvents, getDb } from "./database";
 
-// 配置通知行为
+// 配置通知行为（本地通知，不需要推送令牌）
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -14,33 +14,40 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// 请求通知权限
+// 请求通知权限（仅本地通知，不请求推送令牌）
 export async function requestNotificationPermission(): Promise<boolean> {
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  try {
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") {
+      console.log("通知权限被拒绝");
+      return false;
+    }
+
+    // Android 需要设置通知渠道
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("calendar-reminders", {
+        name: "日历提醒",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#4A90D9",
+        sound: "default",
+      });
+    }
+
+    return true;
+  } catch (error) {
+    // 在 Expo Go 中可能会有推送通知相关的警告，但本地通知仍然可用
+    console.warn("通知权限请求警告（本地通知仍可用）:", error);
+    return true;
   }
-
-  if (finalStatus !== "granted") {
-    console.log("通知权限被拒绝");
-    return false;
-  }
-
-  // Android 需要设置通知渠道
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("calendar-reminders", {
-      name: "日历提醒",
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#4A90D9",
-      sound: "default",
-    });
-  }
-
-  return true;
 }
 
 // 获取事件的通知标识符

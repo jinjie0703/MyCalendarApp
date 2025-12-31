@@ -16,6 +16,7 @@ import {
   getEventsByDateRange,
   initDatabase,
 } from "@/lib/database";
+import { cancelEventNotification } from "@/lib/notifications";
 
 dayjs.extend(isoWeek);
 
@@ -72,6 +73,9 @@ export function useCalendarEvents(selectedDate: string) {
     async (id: string) => {
       if (!db) return;
       try {
+        // 先取消通知
+        await cancelEventNotification(id);
+        // 再删除事件
         await deleteEvent(db, id);
         await refreshDayEvents(selectedDate);
       } catch (err) {

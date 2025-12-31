@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -21,7 +21,18 @@ import { Ionicons } from "@expo/vector-icons";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { addEvent, EventType, getDb } from "@/lib/database";
+import {
+  addEvent,
+  EventType,
+  getDb,
+  getEventById,
+  updateEvent,
+} from "@/lib/database";
+import {
+  cancelEventNotification,
+  scheduleEventNotification,
+  scheduleRepeatingNotification,
+} from "@/lib/notifications";
 dayjs.extend(customParseFormat);
 
 const CATEGORIES = [
@@ -68,7 +79,11 @@ const PLACEHOLDER_MAP: Record<CategoryKey, string> = {
 
 export default function EventEditModal() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ date?: string }>();
+  const params = useLocalSearchParams<{ date?: string; id?: string }>();
+
+  // 是否是编辑模式
+  const isEditMode = !!params.id;
+  const eventId = params.id;
 
   const initialDate = useMemo(() => {
     const d = params.date;
@@ -82,6 +97,48 @@ export default function EventEditModal() {
   const [startDate, setStartDate] = useState(initialDate);
   const [startTime, setStartTime] = useState(dayjs().format("HH:mm"));
   const [description, setDescription] = useState("");
+  const [isLoading, setIsLoading] = useState(isEditMode);
+
+  // 加载现有事件数据（编辑模式）
+  useEffect(() => {
+    if (isEditMode && eventId) {
+      const loadEvent = async () => {
+        try {
+          const db = getDb();
+          const event = await getEventById(db, eventId);
+          if (event) {
+            setTitle(event.title);
+            setStartDate(event.date);
+            setStartTime(event.time || dayjs().format("HH:mm"));
+            setDescription(event.description || "");
+            setCategory(event.type as CategoryKey);
+            setRemindOffsetMin(event.remindOffsetMin ?? 0);
+            setRepeatRule((event.repeatRule as any) || "none");
+
+            // 解析 payload
+            if (event.payload) {
+              try {
+                const payload = JSON.parse(event.payload);
+                if (payload.isAllDay !== undefined)
+                  setIsAllDay(payload.isAllDay);
+                if (payload.endDate) setEndDate(payload.endDate);
+                if (payload.endTime) setEndTime(payload.endTime);
+                if (payload.phone) setPhone(payload.phone);
+                if (payload.remindLunar !== undefined)
+                  setRemindLunar(payload.remindLunar);
+              } catch {}
+            }
+          }
+        } catch (err) {
+          console.error("加载事件失败:", err);
+          Alert.alert("错误", "加载事件失败");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadEvent();
+    }
+  }, [isEditMode, eventId]);
 
   // --- Schedule specific states ---
   const [isAllDay, setIsAllDay] = useState(false);
@@ -136,7 +193,6 @@ export default function EventEditModal() {
       finalTime = parsedTime.format("HH:mm");
     }
 
-    const db = getDb();
     const selectedCategory = CATEGORIES.find((c) => c.key === category);
 
     let payload: any = { categoryLabel: selectedCategory?.label };
@@ -165,7 +221,7 @@ export default function EventEditModal() {
         break;
     }
 
-    await addEvent(db, {
+    const eventData = {
       title: t,
       date: startDate,
       time: finalTime,
@@ -174,8 +230,34 @@ export default function EventEditModal() {
       remindOffsetMin,
       repeatRule,
       type: categoryToEventType(category),
-      payload,
-    });
+      payload: JSON.stringify(payload),
+    };
+
+    const db = getDb();
+    let savedEvent;
+
+    if (isEditMode && eventId) {
+      // 编辑模式：更新现有事件
+      await updateEvent(db, eventId, eventData);
+      savedEvent = { ...eventData, id: eventId };
+
+      // 先取消旧通知
+      await cancelEventNotification(eventId);
+    } else {
+      // 新建模式
+      savedEvent = await addEvent(db, eventData);
+    }
+
+    // 安排通知
+    try {
+      if (repeatRule && repeatRule !== "none") {
+        await scheduleRepeatingNotification(savedEvent);
+      } else {
+        await scheduleEventNotification(savedEvent);
+      }
+    } catch (e) {
+      console.error("安排通知失败:", e);
+    }
 
     router.back();
   };
@@ -217,10 +299,12 @@ export default function EventEditModal() {
             <Ionicons name="close" size={26} color="#111" />
           </Pressable>
           <ThemedText type="title" style={styles.navTitle}>
-            新建事件
+            {isEditMode ? "编辑事件" : "新建事件"}
           </ThemedText>
-          <Pressable onPress={onSave} hitSlop={10}>
-            <ThemedText style={styles.navDone}>完成</ThemedText>
+          <Pressable onPress={onSave} hitSlop={10} disabled={isLoading}>
+            <ThemedText style={[styles.navDone, isLoading && { opacity: 0.5 }]}>
+              {isLoading ? "加载中..." : "完成"}
+            </ThemedText>
           </Pressable>
         </ThemedView>
         {/* 分类选择 */}
