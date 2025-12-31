@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import dayjs from "dayjs";
@@ -11,7 +11,12 @@ type Props = {
   selectedDate: string; // YYYY-MM-DD
   onPressAdd: () => void;
   onPressToday: () => void;
-  onPressMore: () => void;
+  onPressMore?: (anchor?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => void;
 };
 
 export function CalendarHeader({
@@ -20,6 +25,7 @@ export function CalendarHeader({
   onPressToday,
   onPressMore,
 }: Props) {
+  const moreRef = useRef<View>(null);
   const info = useMemo(() => {
     const d = dayjs(selectedDate, "YYYY-MM-DD", true);
     const month = d.isValid() ? d.format("M") : "--";
@@ -58,9 +64,20 @@ export function CalendarHeader({
         <Pressable onPress={onPressToday} hitSlop={10} style={styles.iconBtn}>
           <IconSymbol name="calendar" size={22} color="#111" />
         </Pressable>
-        <Pressable onPress={onPressMore} hitSlop={10} style={styles.iconBtn}>
-          <IconSymbol name="ellipsis" size={22} color="#111" />
-        </Pressable>
+        <View ref={moreRef} collapsable={false}>
+          <Pressable
+            onPress={() => {
+              if (!onPressMore) return;
+              moreRef.current?.measureInWindow((x, y, width, height) => {
+                onPressMore({ x, y, width, height });
+              });
+            }}
+            hitSlop={10}
+            style={styles.iconBtn}
+          >
+            <IconSymbol name="ellipsis" size={22} color="#111" />
+          </Pressable>
+        </View>
       </View>
     </ThemedView>
   );

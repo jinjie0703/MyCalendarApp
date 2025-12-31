@@ -15,8 +15,10 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack>
-        {/* App root (no Tabs) */}
+        {/* App root */}
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
+        <Stack.Screen name="year" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
 
         {/* Modals */}
         <Stack.Screen

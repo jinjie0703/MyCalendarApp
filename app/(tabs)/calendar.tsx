@@ -1,12 +1,7 @@
+import { ActionMenu } from "@/components/action-menu";
 import { CalendarHeader } from "@/components/calendar-header";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActionSheetIOS,
-  Alert,
-  Platform,
-  Pressable,
-  StyleSheet,
-} from "react-native";
+import { Alert, Pressable, StyleSheet } from "react-native";
 
 import dayjs from "dayjs";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -32,6 +27,7 @@ export default function CalendarScreen() {
 
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(today);
+  const [calendarKey, setCalendarKey] = useState(0);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const router = useRouter();
 
@@ -44,9 +40,9 @@ export default function CalendarScreen() {
       });
   }, []);
 
-  const [viewMode, setViewMode] = useState<"month" | "year" | "agenda">(
-    "month"
-  );
+  const viewMode = "month" as const;
+  const setViewMode = (_m: "month") => {};
+
   const [showAlmanac, setShowAlmanac] = useState(true);
 
   const solarFestivals: Record<string, string> = {
@@ -167,52 +163,22 @@ export default function CalendarScreen() {
     return marked;
   }, [selectedDate]);
 
-  const handleMorePress = () => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["取消", "年视图", "纵览", "设置", "显示/隐藏黄历"],
-          cancelButtonIndex: 0,
-        },
-        (buttonIndex) => {
-          switch (buttonIndex) {
-            case 1:
-              setViewMode("year");
-              break;
-            case 2:
-              setViewMode("agenda");
-              break;
-            case 3:
-              // 设置页面待实现
-              Alert.alert("提示", "设置页面待实现");
-              break;
-            case 4:
-              setShowAlmanac(!showAlmanac);
-              break;
-          }
-        }
-      );
-    } else {
-      // Android 可以使用其他方式实现
-      Alert.alert(
-        "更多选项",
-        "",
-        [
-          { text: "年视图", onPress: () => setViewMode("year") },
-          { text: "纵览", onPress: () => setViewMode("agenda") },
-          {
-            text: "设置",
-            onPress: () => Alert.alert("提示", "设置页面待实现"),
-          },
-          {
-            text: showAlmanac ? "隐藏黄历" : "显示黄历",
-            onPress: () => setShowAlmanac(!showAlmanac),
-          },
-          { text: "取消", style: "cancel" },
-        ],
-        { cancelable: true }
-      );
-    }
+  const [moreMenuVisible, setMoreMenuVisible] = useState(false);
+  const [moreAnchor, setMoreAnchor] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const handleMorePress = (anchor?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => {
+    if (anchor) setMoreAnchor(anchor);
+    setMoreMenuVisible(true);
   };
 
   const refresh = async (date: string) => {
@@ -253,12 +219,41 @@ export default function CalendarScreen() {
               params: { date: selectedDate },
             })
           }
-          onPressToday={() => setSelectedDate(today)}
+          onPressToday={() => {
+            setViewMode("month");
+            setSelectedDate(today);
+            // 强制 Calendar 重新挂载，确保跳转到对应月份（部分版本 current 更新不会自动翻页）
+            setCalendarKey((k) => k + 1);
+          }}
           onPressMore={handleMorePress}
+        />
+
+        <ActionMenu
+          visible={moreMenuVisible}
+          onRequestClose={() => setMoreMenuVisible(false)}
+          anchor={moreAnchor}
+          items={[
+            {
+              key: "year",
+              label: "年视图",
+              onPress: () =>
+                router.push({
+                  pathname: "/year",
+                  params: { date: selectedDate },
+                }),
+            },
+            {
+              key: "settings",
+              label: "设置",
+              onPress: () => router.push("/settings"),
+            },
+          ]}
         />
 
         {viewMode === "month" && (
           <Calendar
+            key={calendarKey}
+            current={selectedDate}
             onDayPress={(d) => setSelectedDate(d.dateString)}
             markedDates={markedDates}
             enableSwipeMonths
@@ -315,30 +310,38 @@ export default function CalendarScreen() {
           />
         )}
 
-        {viewMode === "year" && (
-          <ThemedView style={styles.section}>
-            <ThemedText type="subtitle">年视图（待完善）</ThemedText>
-            <ThemedText style={styles.hint}>
-              这里先做占位：后续可以做 12 个月缩略日历。
-            </ThemedText>
-          </ThemedView>
-        )}
-
-        {viewMode === "agenda" && (
-          <ThemedView style={styles.section}>
-            <ThemedText type="subtitle">纵览（待完善）</ThemedText>
-            <ThemedText style={styles.hint}>
-              这里先做占位：后续可以做按时间轴/按周的汇总列表。
-            </ThemedText>
-          </ThemedView>
-        )}
+        {/* 年视图已迁移为独立页面 /year，这里不再渲染 */}
 
         {showAlmanac && (
           <ThemedView style={styles.section}>
             <ThemedText type="subtitle">{selectedDate} 黄历</ThemedText>
-            <ThemedText style={styles.almanacText}>
-              {getAlmanacInfo(selectedDate)}
-            </ThemedText>
+            <ThemedView style={styles.almanacText}>
+              {(() => {
+                const lines = getAlmanacInfo(selectedDate).split("\n");
+                return lines.map((line, idx) => {
+                  const isTitle = idx === 0;
+                  const isYi = line.startsWith("宜:");
+                  const isJi = line.startsWith("忌:");
+                  const isChongSha = line.startsWith("冲煞:");
+                  return (
+                    <ThemedText
+                      key={`${idx}-${line}`}
+                      style={[
+                        styles.almanacLine,
+                        isTitle && styles.almanacLineTitle,
+                        isYi && styles.almanacLineYi,
+                        isJi && styles.almanacLineJi,
+                        isChongSha && styles.almanacLineChongSha,
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {line}
+                    </ThemedText>
+                  );
+                });
+              })()}
+            </ThemedView>
           </ThemedView>
         )}
 
@@ -392,11 +395,32 @@ const styles = StyleSheet.create({
     color: "#C0392B",
   },
   almanacText: {
-    fontSize: 14,
-    lineHeight: 20,
-    opacity: 0.9,
     padding: 12,
-    borderRadius: 10,
-    backgroundColor: "rgba(161,206,220,0.15)",
+    borderRadius: 12,
+    backgroundColor: "rgba(161,206,220,0.14)",
+    gap: 6,
+  },
+  almanacLine: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "rgba(0,0,0,0.70)",
+  },
+  almanacLineTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "rgba(0,0,0,0.82)",
+    marginBottom: 2,
+  },
+  almanacLineYi: {
+    color: "#1E8449",
+    fontWeight: "700",
+  },
+  almanacLineJi: {
+    color: "#C0392B",
+    fontWeight: "700",
+  },
+  almanacLineChongSha: {
+    color: "#6C5CE7",
+    fontWeight: "600",
   },
 });
