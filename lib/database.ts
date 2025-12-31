@@ -3,6 +3,14 @@ import * as SQLite from "expo-sqlite";
 // expo-sqlite (SDK 50+ / 51+ / 52+ / 53+ / 54+) 推荐使用 sync API：openDatabaseSync / execSync
 // 这样类型也更匹配（不会出现 openDatabase/transaction 不存在的问题）
 
+export type EventType =
+  | "reminder"
+  | "schedule"
+  | "course"
+  | "countdown"
+  | "birthday"
+  | "anniversary";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -12,6 +20,8 @@ export interface CalendarEvent {
   color?: string;
   remindOffsetMin?: number; // 提前多少分钟提醒：0=任务发生时，5=提前5分钟...
   repeatRule?: string; // 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
+  type: EventType;
+  payload?: string; // JSON string for extra data
 }
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -36,7 +46,9 @@ export const initDatabase = async () => {
       description TEXT,
       color TEXT,
       remindOffsetMin INTEGER,
-      repeatRule TEXT
+      repeatRule TEXT,
+      type TEXT,
+      payload TEXT
     );
   `);
 
@@ -46,6 +58,12 @@ export const initDatabase = async () => {
   } catch {}
   try {
     database.execSync("ALTER TABLE events ADD COLUMN repeatRule TEXT");
+  } catch {}
+  try {
+    database.execSync("ALTER TABLE events ADD COLUMN type TEXT");
+  } catch {}
+  try {
+    database.execSync("ALTER TABLE events ADD COLUMN payload TEXT");
   } catch {}
 
   return database;
@@ -59,7 +77,7 @@ export const addEvent = async (
   const id = Date.now().toString();
 
   database.runSync(
-    "INSERT INTO events (id, title, date, time, description, color, remindOffsetMin, repeatRule) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO events (id, title, date, time, description, color, remindOffsetMin, repeatRule, type, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       id,
       event.title,
@@ -67,8 +85,10 @@ export const addEvent = async (
       event.time ?? "",
       event.description ?? "",
       event.color ?? "#A1CEDC",
-      event.remindOffsetMin ?? 0, // 默认不提醒
-      event.repeatRule ?? "none", // 默认不重复
+      event.remindOffsetMin ?? 0,
+      event.repeatRule ?? "none",
+      event.type,
+      event.payload ?? "",
     ]
   );
 
@@ -94,6 +114,8 @@ export const getEventsByDate = async (
     // SQLite 读出来可能是 null/undefined
     remindOffsetMin: (r as any).remindOffsetMin ?? undefined,
     repeatRule: (r as any).repeatRule || undefined,
+    type: (r as any).type ?? "reminder",
+    payload: (r as any).payload || undefined,
   }));
 };
 
@@ -115,6 +137,8 @@ export const getEventById = async (
     color: r.color || undefined,
     remindOffsetMin: (r as any).remindOffsetMin ?? undefined,
     repeatRule: (r as any).repeatRule || undefined,
+    type: (r as any).type ?? "reminder",
+    payload: (r as any).payload || undefined,
   };
 };
 
@@ -125,7 +149,7 @@ export const updateEvent = async (
   patch: Omit<CalendarEvent, "id">
 ): Promise<void> => {
   database.runSync(
-    "UPDATE events SET title = ?, date = ?, time = ?, description = ?, color = ?, remindOffsetMin = ?, repeatRule = ? WHERE id = ?",
+    "UPDATE events SET title = ?, date = ?, time = ?, description = ?, color = ?, remindOffsetMin = ?, repeatRule = ?, type = ?, payload = ? WHERE id = ?",
     [
       patch.title,
       patch.date,
@@ -134,6 +158,8 @@ export const updateEvent = async (
       patch.color ?? "#A1CEDC",
       patch.remindOffsetMin ?? 0,
       patch.repeatRule ?? "none",
+      patch.type,
+      patch.payload ?? "",
       id,
     ]
   );

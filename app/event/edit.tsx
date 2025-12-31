@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -20,7 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { addEvent, getDb } from "@/lib/database";
+import { addEvent, EventType, getDb } from "@/lib/database";
 dayjs.extend(customParseFormat);
 
 const CATEGORIES = [
@@ -52,7 +53,18 @@ const CATEGORIES = [
   },
 ] as const;
 
-type CategoryKey = (typeof CATEGORIES)[number]["key"];
+type CategoryKey = (typeof CATEGORIES)[number]["key"]; // UI 分类 key
+
+const categoryToEventType = (k: CategoryKey): EventType => k;
+
+const PLACEHOLDER_MAP: Record<CategoryKey, string> = {
+  reminder: "请输入提醒",
+  schedule: "请输入日程",
+  course: "请输入课程名称",
+  countdown: "请输入倒数日",
+  birthday: "请输入姓名",
+  anniversary: "请输入纪念日",
+};
 
 export default function EventEditModal() {
   const router = useRouter();
@@ -67,9 +79,27 @@ export default function EventEditModal() {
 
   const [category, setCategory] = useState<CategoryKey>("reminder");
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(initialDate);
-  const [time, setTime] = useState(dayjs().format("HH:mm"));
+  const [startDate, setStartDate] = useState(initialDate);
+  const [startTime, setStartTime] = useState(dayjs().format("HH:mm"));
   const [description, setDescription] = useState("");
+
+  // --- Schedule specific states ---
+  const [isAllDay, setIsAllDay] = useState(false);
+  const [endDate, setEndDate] = useState(initialDate);
+  const [endTime, setEndTime] = useState(
+    dayjs().add(1, "hour").format("HH:mm")
+  );
+
+  // --- Course specific states ---
+  const [periods, setPeriods] = useState([
+    { startTime: "08:00", endTime: "09:45", repeatRule: "weekly" },
+  ]);
+
+  // --- Birthday specific states ---
+  const [phone, setPhone] = useState("");
+
+  // --- Anniversary specific states ---
+  const [remindLunar, setRemindLunar] = useState(false);
 
   // UI 状态：系统时间选择弹窗（iOS/Android 都会走原生）
   const [pickerVisible, setPickerVisible] = useState<null | "date" | "time">(
@@ -92,13 +122,13 @@ export default function EventEditModal() {
     }
 
     // 基础校验
-    if (!dayjs(date, "YYYY-MM-DD", true).isValid()) {
+    if (!dayjs(startDate, "YYYY-MM-DD", true).isValid()) {
       Alert.alert("提示", "日期格式请使用 YYYY-MM-DD");
       return;
     }
     let finalTime = "";
-    if (time) {
-      const parsedTime = dayjs(time, ["H:mm", "HH:mm"], true);
+    if (startTime) {
+      const parsedTime = dayjs(startTime, ["H:mm", "HH:mm"], true);
       if (!parsedTime.isValid()) {
         Alert.alert("提示", "时间格式不合法，请重新选择");
         return;
@@ -108,14 +138,43 @@ export default function EventEditModal() {
 
     const db = getDb();
     const selectedCategory = CATEGORIES.find((c) => c.key === category);
+
+    let payload: any = { categoryLabel: selectedCategory?.label };
+
+    switch (category) {
+      case "reminder":
+        break;
+      case "schedule":
+        payload = {
+          ...payload,
+          isAllDay,
+          endDate,
+          endTime,
+        };
+        break;
+      case "course":
+        payload = { ...payload, periods };
+        break;
+      case "countdown":
+        break;
+      case "birthday":
+        payload = { ...payload, phone };
+        break;
+      case "anniversary":
+        payload = { ...payload, remindLunar };
+        break;
+    }
+
     await addEvent(db, {
       title: t,
-      date,
+      date: startDate,
       time: finalTime,
       description,
       color: selectedCategory?.color || "#94A3B8",
       remindOffsetMin,
       repeatRule,
+      type: categoryToEventType(category),
+      payload,
     });
 
     router.back();
@@ -192,12 +251,144 @@ export default function EventEditModal() {
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="请输入提醒"
+          placeholder={PLACEHOLDER_MAP[category]}
           placeholderTextColor="#B7B7B7"
           style={styles.titleInput}
         />
         {/* 列表项 */}
         <ThemedView style={styles.list}>
+          {/* --- Reminder --- */}
+          {category === "reminder" && (
+            <>
+              <Pressable
+                style={styles.listItem}
+                onPress={() => setPickerVisible("date")}
+              >
+                <ThemedText style={styles.listLeft}>日期</ThemedText>
+                <View style={styles.listRight}>
+                  <ThemedText style={styles.listValue}>
+                    {dayjs(startDate, "YYYY-MM-DD", true).format(
+                      "YYYY年M月D日"
+                    )}
+                  </ThemedText>
+                  <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
+                </View>
+              </Pressable>
+
+              <Pressable
+                style={styles.listItem}
+                onPress={() => setPickerVisible("time")}
+              >
+                <ThemedText style={styles.listLeft}>时间</ThemedText>
+                <View style={styles.listRight}>
+                  <ThemedText style={styles.listValue}>
+                    {startTime || ""}
+                  </ThemedText>
+                  <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
+                </View>
+              </Pressable>
+            </>
+          )}
+
+          {/* --- Schedule --- */}
+          {category === "schedule" && (
+            <>
+              <View style={styles.listItem}>
+                <ThemedText style={styles.listLeft}>全天事件</ThemedText>
+                <View style={styles.listRight}>
+                  <Switch value={isAllDay} onValueChange={setIsAllDay} />
+                </View>
+              </View>
+
+              <Pressable style={styles.listItem} onPress={() => {}}>
+                <ThemedText style={styles.listLeft}>开始时间</ThemedText>
+                <View style={styles.listRight}>
+                  <ThemedText style={styles.listValue}>
+                    {`${dayjs(startDate, "YYYY-MM-DD", true).format(
+                      "YYYY/MM/DD"
+                    )} ${!isAllDay ? startTime : ""}`}
+                  </ThemedText>
+                  <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
+                </View>
+              </Pressable>
+
+              <Pressable style={styles.listItem} onPress={() => {}}>
+                <ThemedText style={styles.listLeft}>结束时间</ThemedText>
+                <View style={styles.listRight}>
+                  <ThemedText style={styles.listValue}>
+                    {`${dayjs(endDate, "YYYY-MM-DD", true).format(
+                      "YYYY/MM/DD"
+                    )} ${!isAllDay ? endTime : ""}`}
+                  </ThemedText>
+                  <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
+                </View>
+              </Pressable>
+            </>
+          )}
+
+          {/* --- Course --- */}
+          {category === "course" && (
+            <>
+              <View style={styles.listItem}>
+                <ThemedText style={styles.listLeft}>上课应用</ThemedText>
+                <View style={styles.listRight}>
+                  <ThemedText style={styles.listValue}>未设置</ThemedText>
+                  <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
+                </View>
+              </View>
+              {periods.map((p, i) => (
+                <Pressable key={i} style={styles.listItem}>
+                  <ThemedText style={styles.listLeft}>{`时段 ${
+                    i + 1
+                  }`}</ThemedText>
+                  <View style={styles.listRight}>
+                    <ThemedText style={styles.listValue}>
+                      {`${p.startTime}-${p.endTime}`}
+                    </ThemedText>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={18}
+                      color="#B7B7B7"
+                    />
+                  </View>
+                </Pressable>
+              ))}
+              <Pressable style={styles.listItem}>
+                <ThemedText style={{ ...styles.listLeft, color: "#4F7CFF" }}>
+                  添加其他时段
+                </ThemedText>
+              </Pressable>
+            </>
+          )}
+
+          {/* --- Countdown / Birthday / Anniversary --- */}
+          {(category === "countdown" ||
+            category === "birthday" ||
+            category === "anniversary") && (
+            <Pressable
+              style={styles.listItem}
+              onPress={() => setPickerVisible("date")}
+            >
+              <ThemedText style={styles.listLeft}>
+                {category === "birthday"
+                  ? "生日"
+                  : category === "anniversary"
+                  ? "纪念日"
+                  : "日期"}
+              </ThemedText>
+              <View style={styles.listRight}>
+                <ThemedText style={styles.listValue}>
+                  {dayjs(startDate, "YYYY-MM-DD", true).format(
+                    category === "birthday" ? "M月D日" : "YYYY年M月D日"
+                  )}
+                </ThemedText>
+                <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
+              </View>
+            </Pressable>
+          )}
+
+          {/* --- Shared Fields --- */}
+
           <Pressable
             style={styles.listItem}
             onPress={() => setPickerVisible("date")}
@@ -205,7 +396,7 @@ export default function EventEditModal() {
             <ThemedText style={styles.listLeft}>日期</ThemedText>
             <View style={styles.listRight}>
               <ThemedText style={styles.listValue}>
-                {dayjs(date, "YYYY-MM-DD", true).format("YYYY年M月D日")}
+                {dayjs(startDate, "YYYY-MM-DD", true).format("YYYY年M月D日")}
               </ThemedText>
               <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
             </View>
@@ -217,7 +408,9 @@ export default function EventEditModal() {
           >
             <ThemedText style={styles.listLeft}>时间</ThemedText>
             <View style={styles.listRight}>
-              <ThemedText style={styles.listValue}>{time || ""}</ThemedText>
+              <ThemedText style={styles.listValue}>
+                {startTime || ""}
+              </ThemedText>
               <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
             </View>
           </Pressable>
@@ -260,7 +453,7 @@ export default function EventEditModal() {
         {pickerVisible ? (
           <DateTimePicker
             value={dayjs(
-              `${date} ${time || "00:00"}`,
+              `${startDate} ${startTime || "00:00"}`,
               "YYYY-MM-DD HH:mm"
             ).toDate()}
             mode={pickerVisible}
@@ -273,10 +466,10 @@ export default function EventEditModal() {
               }
               const d = dayjs(selected);
               if (pickerVisible === "date") {
-                setDate(d.format("YYYY-MM-DD"));
+                setStartDate(d.format("YYYY-MM-DD"));
                 setPickerVisible(null);
               } else {
-                setTime(d.format("HH:mm"));
+                setStartTime(d.format("HH:mm"));
                 setPickerVisible(null);
               }
             }}
@@ -368,8 +561,8 @@ export default function EventEditModal() {
 
         {/* 隐藏字段：保留 date/time state（不显示） */}
         <View style={styles.hidden}>
-          <TextInput value={date} onChangeText={setDate} />
-          <TextInput value={time} onChangeText={setTime} />
+          <TextInput value={startDate} onChangeText={setStartDate} />
+          <TextInput value={startTime} onChangeText={setStartTime} />
         </View>
       </ThemedView>
     </ParallaxScrollView>
