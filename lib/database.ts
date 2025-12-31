@@ -172,3 +172,46 @@ export const deleteEvent = async (
 ): Promise<void> => {
   database.runSync("DELETE FROM events WHERE id = ?", [id]);
 };
+
+// 获取日期范围内的事件
+export const getEventsByDateRange = async (
+  database: SQLite.SQLiteDatabase,
+  startDate: string,
+  endDate: string
+): Promise<CalendarEvent[]> => {
+  const rows = database.getAllSync<CalendarEvent>(
+    "SELECT * FROM events WHERE date >= ? AND date <= ? ORDER BY date ASC, time ASC",
+    [startDate, endDate]
+  );
+
+  return rows.map((r) => ({
+    ...r,
+    time: r.time || undefined,
+    description: r.description || undefined,
+    color: r.color || undefined,
+    remindOffsetMin: (r as any).remindOffsetMin ?? undefined,
+    repeatRule: (r as any).repeatRule || undefined,
+    type: (r as any).type ?? "reminder",
+    payload: (r as any).payload || undefined,
+  }));
+};
+
+// 获取所有事件
+export const getAllEvents = async (
+  database: SQLite.SQLiteDatabase
+): Promise<CalendarEvent[]> => {
+  const rows = database.getAllSync<CalendarEvent>(
+    "SELECT * FROM events ORDER BY date ASC, time ASC"
+  );
+
+  return rows.map((r) => ({
+    ...r,
+    time: r.time || undefined,
+    description: r.description || undefined,
+    color: r.color || undefined,
+    remindOffsetMin: (r as any).remindOffsetMin ?? undefined,
+    repeatRule: (r as any).repeatRule || undefined,
+    type: (r as any).type ?? "reminder",
+    payload: (r as any).payload || undefined,
+  }));
+};

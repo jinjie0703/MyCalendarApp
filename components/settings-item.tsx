@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Switch, View } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { Colors } from "@/constants/theme";
 
 type Props = {
   title: string;
@@ -14,6 +15,8 @@ type Props = {
   onPress?: () => void;
   onValueChange?: (v: boolean) => void;
   disabled?: boolean;
+  destructive?: boolean;
+  showArrow?: boolean;
 };
 
 export function SettingsItem({
@@ -25,11 +28,17 @@ export function SettingsItem({
   onPress,
   onValueChange,
   disabled,
+  destructive,
+  showArrow,
 }: Props) {
   const content = (
     <ThemedView style={styles.row}>
       <View style={styles.left}>
-        <ThemedText style={styles.title}>{title}</ThemedText>
+        <ThemedText
+          style={[styles.title, destructive && styles.destructiveText]}
+        >
+          {title}
+        </ThemedText>
         {!!description && (
           <ThemedText style={styles.desc} numberOfLines={2}>
             {description}
@@ -45,10 +54,22 @@ export function SettingsItem({
         )}
 
         {type === "switch" ? (
-          <Switch value={!!value} onValueChange={onValueChange} />
-        ) : (
-          <IconSymbol name="chevron.right" size={18} color="rgba(0,0,0,0.35)" />
-        )}
+          <Switch
+            value={!!value}
+            onValueChange={onValueChange}
+            trackColor={{
+              false: Colors.light.border,
+              true: Colors.light.primary,
+            }}
+            thumbColor="#fff"
+          />
+        ) : showArrow || type === "link" ? (
+          <IconSymbol
+            name="chevron.right"
+            size={16}
+            color={Colors.light.textTertiary}
+          />
+        ) : null}
       </View>
     </ThemedView>
   );
@@ -74,47 +95,50 @@ export function SettingsItem({
 
 const styles = StyleSheet.create({
   pressable: {
-    borderRadius: 14,
+    borderRadius: 12,
   },
   pressed: {
-    opacity: 0.85,
+    backgroundColor: Colors.light.background,
   },
   disabled: {
     opacity: 0.5,
   },
   row: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: 56,
   },
   left: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 16,
     gap: 4,
   },
   title: {
     fontSize: 16,
     fontWeight: "600",
-    color: "rgba(0,0,0,0.85)",
+    color: Colors.light.text,
+  },
+  destructiveText: {
+    color: Colors.light.danger,
   },
   desc: {
-    fontSize: 12,
-    lineHeight: 16,
-    opacity: 0.65,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.light.textSecondary,
   },
   right: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   rightLabel: {
-    fontSize: 13,
-    opacity: 0.65,
-    maxWidth: 140,
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    maxWidth: 150,
     textAlign: "right",
   },
 });
-
