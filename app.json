@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MyCalendarApp",
-    "slug": "MyCalendarApp",
+    "name": "jinjie日历",
+    "slug": "jinjie-calendar",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -20,7 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.MyCalendarApp"
+      "package": "com.anonymous.jinjie-calendar"
     },
     "web": {
       "output": "static",
