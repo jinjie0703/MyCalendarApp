@@ -286,7 +286,6 @@ export default function EventEditModal() {
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: "#FFFFFF", dark: "#000" }}
-      headerImage={<ThemedView />}
     >
       <ThemedView style={styles.page}>
         {/* 顶部栏 */}

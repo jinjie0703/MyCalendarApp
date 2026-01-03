@@ -35,8 +35,6 @@ import {
   reminderOptions,
   RingtoneOption,
   ringtoneOptions,
-  ThemeMode,
-  themeOptions,
   timezoneOptions,
 } from "@/lib/settings";
 
@@ -320,57 +318,9 @@ export default function SettingsScreen() {
     <>
       <ParallaxScrollView
         headerBackgroundColor={{ light: Colors.light.primary, dark: "#1a1a2e" }}
-        headerImage={
-          <View style={styles.headerContent}>
-            <View style={styles.headerIconContainer}>
-              <Ionicons name="settings" size={48} color="#fff" />
-            </View>
-            <ThemedText style={styles.headerTitle}>设置</ThemedText>
-            <ThemedText style={styles.headerSubtitle}>
-              个性化您的日历体验
-            </ThemedText>
-          </View>
-        }
       >
         <ThemedView style={styles.container}>
           {/* 外观 */}
-          <Section title="外观" icon="color-palette-outline">
-            <Card>
-              <SettingsItem
-                title="主题"
-                description="设置应用的颜色主题"
-                rightLabel={
-                  themeOptions.find((o) => o.value === settings.themeMode)
-                    ?.label || "跟随系统"
-                }
-                onPress={() => setThemeModalVisible(true)}
-              />
-              <Divider />
-              <SettingsItem
-                title="显示农历"
-                description="在日历视图中显示农历日期"
-                type="switch"
-                value={settings.showLunarCalendar}
-                onValueChange={(v) => updateSettings({ showLunarCalendar: v })}
-              />
-              <Divider />
-              <SettingsItem
-                title="显示周数"
-                description="在日历边缘显示周序号"
-                type="switch"
-                value={settings.showWeekNumbers}
-                onValueChange={(v) => updateSettings({ showWeekNumbers: v })}
-              />
-              <Divider />
-              <SettingsItem
-                title="紧凑模式"
-                description="减小日历格子间距以显示更多内容"
-                type="switch"
-                value={settings.compactMode}
-                onValueChange={(v) => updateSettings({ compactMode: v })}
-              />
-            </Card>
-          </Section>
 
           {/* 通用 */}
           <Section title="通用" icon="cog-outline">
@@ -592,16 +542,6 @@ export default function SettingsScreen() {
         onClose={() => setRingtoneModalVisible(false)}
       />
 
-      {/* 主题选择 Modal */}
-      <PickerModal
-        visible={themeModalVisible}
-        title="选择主题"
-        options={themeOptions}
-        value={settings.themeMode}
-        onSelect={(v) => updateSettings({ themeMode: v as ThemeMode })}
-        onClose={() => setThemeModalVisible(false)}
-      />
-
       {/* 日历视图选择 Modal */}
       <PickerModal
         visible={viewModeModalVisible}
@@ -660,31 +600,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 8,
   },
-  headerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingBottom: 20,
-  },
-  headerIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#fff",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.85)",
-  },
+
   section: {
     gap: 12,
   },
