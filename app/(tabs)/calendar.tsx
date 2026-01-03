@@ -89,9 +89,6 @@ export default function CalendarScreen() {
 
   // 更多菜单选项
   const menuItems = [
-    { key: "month", label: "月视图", onPress: () => setViewMode("month") },
-    { key: "week", label: "周视图", onPress: () => setViewMode("week") },
-    { key: "day", label: "日视图", onPress: () => setViewMode("day") },
     {
       key: "year",
       label: "年视图",
@@ -170,7 +167,6 @@ export default function CalendarScreen() {
           <EventSection
             selectedDate={selectedDate}
             events={events}
-            onAddEvent={() => navigateToEventEdit()}
             onEventPress={(event) => navigateToEventEdit(event.id, event.date)}
             onEventDelete={removeEvent}
           />
