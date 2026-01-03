@@ -110,9 +110,6 @@ function RootLayoutContent() {
           name="modal"
           options={{ presentation: "modal", headerShown: false }}
         />
-
-        {/* 404 页面 */}
-        <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

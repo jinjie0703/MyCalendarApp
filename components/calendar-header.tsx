@@ -13,7 +13,7 @@ dayjs.locale("zh-cn");
 
 type Props = {
   selectedDate: string; // YYYY-MM-DD
-  onPressAdd: () => void;
+
   onPressToday: () => void;
   onPressSearch?: () => void;
   onPressMore?: (anchor?: {
@@ -26,7 +26,6 @@ type Props = {
 
 export function CalendarHeader({
   selectedDate,
-  onPressAdd,
   onPressToday,
   onPressSearch,
   onPressMore,
@@ -90,16 +89,6 @@ export function CalendarHeader({
         >
           <IconSymbol name="calendar" size={20} color={Colors.light.primary} />
         </Pressable>
-        <Pressable
-          onPress={onPressAdd}
-          hitSlop={10}
-          style={({ pressed }) => [
-            styles.addBtn,
-            pressed && styles.addBtnPressed,
-          ]}
-        >
-          <IconSymbol name="plus" size={20} color="#FFFFFF" />
-        </Pressable>
         <View ref={moreRef} collapsable={false}>
           <Pressable
             onPress={() => {
@@ -142,7 +131,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   monthText: {
-    fontSize: 34,
+    fontSize: 25,
     fontWeight: "700",
     color: Colors.light.text,
     letterSpacing: -0.5,

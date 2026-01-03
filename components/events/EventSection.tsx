@@ -39,7 +39,6 @@ export function EventSection({
         </ThemedText>
         <Pressable onPress={onAddEvent} style={styles.addBtn}>
           <IconSymbol name="plus" size={14} color={Colors.light.primary} />
-          <ThemedText style={styles.addBtnText}>添加</ThemedText>
         </Pressable>
       </View>
 

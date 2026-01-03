@@ -112,7 +112,6 @@ export default function CalendarScreen() {
           {/* 头部 */}
           <CalendarHeader
             selectedDate={selectedDate}
-            onPressAdd={() => navigateToEventEdit()}
             onPressToday={() => {
               setViewMode("month");
               goToToday();
