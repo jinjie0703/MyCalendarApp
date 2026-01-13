@@ -10,8 +10,6 @@ import {
   View,
 } from "react-native";
 
-import DateTimePicker from "@react-native-community/datetimepicker";
-
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -21,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { DateTimePickerModal } from "@/components/ui/DateTimePickerModal";
 import {
   addEvent,
   EventType,
@@ -33,6 +32,7 @@ import {
   scheduleEventNotification,
   scheduleRepeatingNotification,
 } from "@/lib/notifications";
+
 dayjs.extend(customParseFormat);
 
 const CATEGORIES = [
@@ -57,7 +57,7 @@ const CATEGORIES = [
   },
 ] as const;
 
-type CategoryKey = (typeof CATEGORIES)[number]["key"]; // UI 分类 key
+type CategoryKey = (typeof CATEGORIES)[number]["key"];
 
 const categoryToEventType = (k: CategoryKey): EventType => k;
 
@@ -72,7 +72,6 @@ export default function EventEditModal() {
   const router = useRouter();
   const params = useLocalSearchParams<{ date?: string; id?: string }>();
 
-  // 是否是编辑模式
   const isEditMode = !!params.id;
   const eventId = params.id;
 
@@ -90,7 +89,31 @@ export default function EventEditModal() {
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(isEditMode);
 
-  // 加载现有事件数据（编辑模式）
+  // Schedule specific states
+  const [isAllDay, setIsAllDay] = useState(false);
+  const [endDate, setEndDate] = useState(initialDate);
+  const [endTime, setEndTime] = useState(dayjs().add(1, "hour").format("HH:mm"));
+
+  // Birthday specific states
+  const [phone, setPhone] = useState("");
+
+  // Anniversary specific states
+  const [remindLunar, setRemindLunar] = useState(false);
+
+  // UI state: date time picker modal
+  const [pickerVisible, setPickerVisible] = useState<
+    null | "date" | "time" | "startDateTime" | "endDateTime"
+  >(null);
+
+  // Reminder/repeat states
+  const [remindOffsetMin, setRemindOffsetMin] = useState<number>(0);
+  const [repeatRule, setRepeatRule] = useState<
+    "none" | "daily" | "weekly" | "monthly" | "yearly"
+  >("none");
+  const [remindModalVisible, setRemindModalVisible] = useState(false);
+  const [repeatModalVisible, setRepeatModalVisible] = useState(false);
+
+  // Load existing event data (edit mode)
   useEffect(() => {
     if (isEditMode && eventId) {
       const loadEvent = async () => {
@@ -106,17 +129,14 @@ export default function EventEditModal() {
             setRemindOffsetMin(event.remindOffsetMin ?? 0);
             setRepeatRule((event.repeatRule as any) || "none");
 
-            // 解析 payload
             if (event.payload) {
               try {
                 const payload = JSON.parse(event.payload);
-                if (payload.isAllDay !== undefined)
-                  setIsAllDay(payload.isAllDay);
+                if (payload.isAllDay !== undefined) setIsAllDay(payload.isAllDay);
                 if (payload.endDate) setEndDate(payload.endDate);
                 if (payload.endTime) setEndTime(payload.endTime);
                 if (payload.phone) setPhone(payload.phone);
-                if (payload.remindLunar !== undefined)
-                  setRemindLunar(payload.remindLunar);
+                if (payload.remindLunar !== undefined) setRemindLunar(payload.remindLunar);
               } catch {}
             }
           }
@@ -131,31 +151,90 @@ export default function EventEditModal() {
     }
   }, [isEditMode, eventId]);
 
-  // --- Schedule specific states ---
-  const [isAllDay, setIsAllDay] = useState(false);
-  const [endDate, setEndDate] = useState(initialDate);
-  const [endTime, setEndTime] = useState(
-    dayjs().add(1, "hour").format("HH:mm")
-  );
+  // Safe date parsing helper
+  const getSafeDate = (dateStr: string, timeStr: string): Date => {
+    const parsed = dayjs(`${dateStr} ${timeStr}`, "YYYY-MM-DD HH:mm", true);
+    if (parsed.isValid()) {
+      return parsed.toDate();
+    }
+    console.warn(`Invalid date/time: ${dateStr} ${timeStr}, using current time`);
+    return new Date();
+  };
 
-  // --- Birthday specific states ---
-  const [phone, setPhone] = useState("");
+  // Get current picker value
+  const getPickerValue = (): Date => {
+    if (pickerVisible === "startDateTime") {
+      return getSafeDate(startDate, startTime || "00:00");
+    } else if (pickerVisible === "endDateTime") {
+      return getSafeDate(endDate, endTime || "00:00");
+    } else if (pickerVisible === "time") {
+      return getSafeDate(dayjs().format("YYYY-MM-DD"), startTime || dayjs().format("HH:mm"));
+    } else {
+      return getSafeDate(startDate, "00:00");
+    }
+  };
 
-  // --- Anniversary specific states ---
-  const [remindLunar, setRemindLunar] = useState(false);
+  // Get current picker mode
+  const getPickerMode = (): "date" | "time" | "datetime" => {
+    if (pickerVisible === "startDateTime" || pickerVisible === "endDateTime") {
+      return isAllDay ? "date" : "datetime";
+    } else if (pickerVisible === "time") {
+      return "time";
+    } else {
+      return "date";
+    }
+  };
 
-  // UI 状态：系统时间选择弹窗（iOS/Android 都会走原生）
-  const [pickerVisible, setPickerVisible] = useState<
-    null | "date" | "time" | "startDateTime" | "endDateTime"
-  >(null);
+  // Get current picker title
+  const getPickerTitle = (): string => {
+    if (pickerVisible === "startDateTime") {
+      return "选择开始时间";
+    } else if (pickerVisible === "endDateTime") {
+      return "选择结束时间";
+    } else if (pickerVisible === "time") {
+      return "选择时间";
+    } else {
+      return "选择日期";
+    }
+  };
 
-  // 提醒/重复（先做 UI + 存库）
-  const [remindOffsetMin, setRemindOffsetMin] = useState<number>(0);
-  const [repeatRule, setRepeatRule] = useState<
-    "none" | "daily" | "weekly" | "monthly" | "yearly"
-  >("none");
-  const [remindModalVisible, setRemindModalVisible] = useState(false);
-  const [repeatModalVisible, setRepeatModalVisible] = useState(false);
+  // Open picker
+  const openPicker = (type: "date" | "time" | "startDateTime" | "endDateTime") => {
+    setPickerVisible(type);
+  };
+
+  // Close picker
+  const closePicker = () => {
+    setPickerVisible(null);
+  };
+
+  // Handle picker confirm
+  const handlePickerConfirm = (selected: Date) => {
+    const d = dayjs(selected);
+    
+    if (pickerVisible === "date") {
+      setStartDate(d.format("YYYY-MM-DD"));
+    } else if (pickerVisible === "time") {
+      setStartTime(d.format("HH:mm"));
+    } else if (pickerVisible === "startDateTime") {
+      setStartDate(d.format("YYYY-MM-DD"));
+      if (!isAllDay) {
+        setStartTime(d.format("HH:mm"));
+      }
+    } else if (pickerVisible === "endDateTime") {
+      setEndDate(d.format("YYYY-MM-DD"));
+      if (!isAllDay) {
+        setEndTime(d.format("HH:mm"));
+      }
+    }
+    
+    closePicker();
+  };
+
+  // Handle picker cancel
+  const handlePickerCancel = () => {
+    closePicker();
+  };
 
   const onSave = async () => {
     const t = title.trim();
@@ -164,7 +243,6 @@ export default function EventEditModal() {
       return;
     }
 
-    // 基础校验
     if (!dayjs(startDate, "YYYY-MM-DD", true).isValid()) {
       Alert.alert("提示", "日期格式请使用 YYYY-MM-DD");
       return;
@@ -185,12 +263,7 @@ export default function EventEditModal() {
 
     switch (category) {
       case "schedule":
-        payload = {
-          ...payload,
-          isAllDay,
-          endDate,
-          endTime,
-        };
+        payload = { ...payload, isAllDay, endDate, endTime };
         break;
       case "countdown":
         break;
@@ -218,18 +291,13 @@ export default function EventEditModal() {
     let savedEvent;
 
     if (isEditMode && eventId) {
-      // 编辑模式：更新现有事件
       await updateEvent(db, eventId, eventData);
       savedEvent = { ...eventData, id: eventId };
-
-      // 先取消旧通知
       await cancelEventNotification(eventId);
     } else {
-      // 新建模式
       savedEvent = await addEvent(db, eventData);
     }
 
-    // 安排通知
     try {
       if (repeatRule && repeatRule !== "none") {
         await scheduleRepeatingNotification(savedEvent);
@@ -251,31 +319,20 @@ export default function EventEditModal() {
 
   const repeatText = useMemo(() => {
     switch (repeatRule) {
-      case "daily":
-        return "每天";
-      case "weekly":
-        return "每周";
-      case "monthly":
-        return "每月";
-      case "yearly":
-        return "每年";
-      default:
-        return "不重复";
+      case "daily": return "每天";
+      case "weekly": return "每周";
+      case "monthly": return "每月";
+      case "yearly": return "每年";
+      default: return "不重复";
     }
   }, [repeatRule]);
 
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#FFFFFF", dark: "#000" }}
-    >
+    <ParallaxScrollView headerBackgroundColor={{ light: "#FFFFFF", dark: "#000" }}>
       <ThemedView style={styles.page}>
-        {/* 顶部栏 */}
+        {/* Header */}
         <ThemedView style={styles.nav}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.navIconBtn}
-            hitSlop={10}
-          >
+          <Pressable onPress={() => router.back()} style={styles.navIconBtn} hitSlop={10}>
             <Ionicons name="close" size={26} color="#111" />
           </Pressable>
           <ThemedText type="title" style={styles.navTitle}>
@@ -287,16 +344,13 @@ export default function EventEditModal() {
             </ThemedText>
           </Pressable>
         </ThemedView>
-        {/* 分类选择 */}
+
+        {/* Category selection */}
         <ThemedView style={styles.categoryRow}>
           {CATEGORIES.map((c) => {
             const selected = c.key === category;
             return (
-              <Pressable
-                key={c.key}
-                onPress={() => setCategory(c.key)}
-                style={styles.categoryItem}
-              >
+              <Pressable key={c.key} onPress={() => setCategory(c.key)} style={styles.categoryItem}>
                 <View
                   style={[
                     styles.categoryIconWrap,
@@ -311,7 +365,8 @@ export default function EventEditModal() {
             );
           })}
         </ThemedView>
-        {/* 标题输入 */}
+
+        {/* Title input */}
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -319,9 +374,10 @@ export default function EventEditModal() {
           placeholderTextColor="#B7B7B7"
           style={styles.titleInput}
         />
-        {/* 列表项 */}
+
+        {/* List items */}
         <ThemedView style={styles.list}>
-          {/* --- Schedule --- */}
+          {/* Schedule */}
           {category === "schedule" && (
             <>
               <View style={styles.listItem}>
@@ -331,31 +387,21 @@ export default function EventEditModal() {
                 </View>
               </View>
 
-              <Pressable
-                style={styles.listItem}
-                onPress={() => setPickerVisible("startDateTime")}
-              >
+              <Pressable style={styles.listItem} onPress={() => openPicker("startDateTime")}>
                 <ThemedText style={styles.listLeft}>开始时间</ThemedText>
                 <View style={styles.listRight}>
                   <ThemedText style={styles.listValue}>
-                    {`${dayjs(startDate, "YYYY-MM-DD", true).format(
-                      "YYYY/MM/DD"
-                    )} ${!isAllDay ? startTime : ""}`}
+                    {`${dayjs(startDate, "YYYY-MM-DD", true).format("YYYY/MM/DD")} ${!isAllDay ? startTime : ""}`}
                   </ThemedText>
                   <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
                 </View>
               </Pressable>
 
-              <Pressable
-                style={styles.listItem}
-                onPress={() => setPickerVisible("endDateTime")}
-              >
+              <Pressable style={styles.listItem} onPress={() => openPicker("endDateTime")}>
                 <ThemedText style={styles.listLeft}>结束时间</ThemedText>
                 <View style={styles.listRight}>
                   <ThemedText style={styles.listValue}>
-                    {`${dayjs(endDate, "YYYY-MM-DD", true).format(
-                      "YYYY/MM/DD"
-                    )} ${!isAllDay ? endTime : ""}`}
+                    {`${dayjs(endDate, "YYYY-MM-DD", true).format("YYYY/MM/DD")} ${!isAllDay ? endTime : ""}`}
                   </ThemedText>
                   <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
                 </View>
@@ -363,69 +409,34 @@ export default function EventEditModal() {
             </>
           )}
 
-          {/* --- Countdown / Birthday / Anniversary --- */}
-          {(category === "countdown" ||
-            category === "birthday" ||
-            category === "anniversary") && (
-            <Pressable
-              style={styles.listItem}
-              onPress={() => setPickerVisible("date")}
-            >
-              <ThemedText style={styles.listLeft}>
-                {category === "birthday"
-                  ? "生日"
-                  : category === "anniversary"
-                  ? "纪念日"
-                  : "日期"}
-              </ThemedText>
-              <View style={styles.listRight}>
-                <ThemedText style={styles.listValue}>
-                  {dayjs(startDate, "YYYY-MM-DD", true).format(
-                    category === "birthday" ? "M月D日" : "YYYY年M月D日"
-                  )}
-                </ThemedText>
-                <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
-              </View>
-            </Pressable>
-          )}
-
-          {/* --- Shared Fields --- */}
+          {/* Countdown / Birthday / Anniversary */}
           {category !== "schedule" && (
             <>
-              <Pressable
-                style={styles.listItem}
-                onPress={() => setPickerVisible("date")}
-              >
-                <ThemedText style={styles.listLeft}>日期</ThemedText>
+              <Pressable style={styles.listItem} onPress={() => openPicker("date")}>
+                <ThemedText style={styles.listLeft}>
+                  {category === "birthday" ? "生日" : category === "anniversary" ? "纪念日" : "日期"}
+                </ThemedText>
                 <View style={styles.listRight}>
                   <ThemedText style={styles.listValue}>
                     {dayjs(startDate, "YYYY-MM-DD", true).format(
-                      "YYYY年M月D日"
+                      category === "birthday" ? "M月D日" : "YYYY年M月D日"
                     )}
                   </ThemedText>
                   <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
                 </View>
               </Pressable>
 
-              <Pressable
-                style={styles.listItem}
-                onPress={() => setPickerVisible("time")}
-              >
+              <Pressable style={styles.listItem} onPress={() => openPicker("time")}>
                 <ThemedText style={styles.listLeft}>时间</ThemedText>
                 <View style={styles.listRight}>
-                  <ThemedText style={styles.listValue}>
-                    {startTime || ""}
-                  </ThemedText>
+                  <ThemedText style={styles.listValue}>{startTime || ""}</ThemedText>
                   <Ionicons name="chevron-forward" size={18} color="#B7B7B7" />
                 </View>
               </Pressable>
             </>
           )}
 
-          <Pressable
-            style={styles.listItem}
-            onPress={() => setRemindModalVisible(true)}
-          >
+          <Pressable style={styles.listItem} onPress={() => setRemindModalVisible(true)}>
             <ThemedText style={styles.listLeft}>提醒</ThemedText>
             <View style={styles.listRight}>
               <ThemedText style={styles.listValue}>{remindText}</ThemedText>
@@ -433,10 +444,7 @@ export default function EventEditModal() {
             </View>
           </Pressable>
 
-          <Pressable
-            style={styles.listItem}
-            onPress={() => setRepeatModalVisible(true)}
-          >
+          <Pressable style={styles.listItem} onPress={() => setRepeatModalVisible(true)}>
             <ThemedText style={styles.listLeft}>重复</ThemedText>
             <View style={styles.listRight}>
               <ThemedText style={styles.listValue}>{repeatText}</ThemedText>
@@ -456,77 +464,24 @@ export default function EventEditModal() {
           />
         </ThemedView>
 
-        {/* 系统日期/时间选择器（点“时间”后弹出） */}
-        {pickerVisible ? (
-          <DateTimePicker
-            value={
-              pickerVisible === "startDateTime"
-                ? dayjs(
-                    `${startDate} ${startTime || "00:00"}`,
-                    "YYYY-MM-DD HH:mm"
-                  ).toDate()
-                : pickerVisible === "endDateTime"
-                ? dayjs(
-                    `${endDate} ${endTime || "00:00"}`,
-                    "YYYY-MM-DD HH:mm"
-                  ).toDate()
-                : dayjs(
-                    `${startDate} ${startTime || "00:00"}`,
-                    "YYYY-MM-DD HH:mm"
-                  ).toDate()
-            }
-            mode={
-              pickerVisible === "startDateTime" || pickerVisible === "endDateTime"
-                ? isAllDay
-                  ? "date"
-                  : "datetime"
-                : pickerVisible === "date" || pickerVisible === "time"
-                ? pickerVisible
-                : "date"
-            }
-            is24Hour
-            onChange={(_, selected) => {
-              // Android: 取消时 selected 为 undefined
-              if (!selected) {
-                setPickerVisible(null);
-                return;
-              }
-              const d = dayjs(selected);
-              
-              if (pickerVisible === "date") {
-                setStartDate(d.format("YYYY-MM-DD"));
-                setPickerVisible(null);
-              } else if (pickerVisible === "time") {
-                setStartTime(d.format("HH:mm"));
-                setPickerVisible(null);
-              } else if (pickerVisible === "startDateTime") {
-                setStartDate(d.format("YYYY-MM-DD"));
-                if (!isAllDay) {
-                  setStartTime(d.format("HH:mm"));
-                }
-                setPickerVisible(null);
-              } else if (pickerVisible === "endDateTime") {
-                setEndDate(d.format("YYYY-MM-DD"));
-                if (!isAllDay) {
-                  setEndTime(d.format("HH:mm"));
-                }
-                setPickerVisible(null);
-              }
-            }}
-          />
-        ) : null}
+        {/* Custom DateTimePickerModal */}
+        <DateTimePickerModal
+          visible={pickerVisible !== null}
+          mode={getPickerMode()}
+          value={getPickerValue()}
+          onConfirm={handlePickerConfirm}
+          onCancel={handlePickerCancel}
+          title={getPickerTitle()}
+        />
 
-        {/* 提醒选择 */}
+        {/* Remind selection modal */}
         <Modal
           visible={remindModalVisible}
           transparent
           animationType="fade"
           onRequestClose={() => setRemindModalVisible(false)}
         >
-          <Pressable
-            style={styles.modalMask}
-            onPress={() => setRemindModalVisible(false)}
-          />
+          <Pressable style={styles.modalMask} onPress={() => setRemindModalVisible(false)} />
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>提醒</Text>
             {[
@@ -558,17 +513,14 @@ export default function EventEditModal() {
           </View>
         </Modal>
 
-        {/* 重复选择 */}
+        {/* Repeat selection modal */}
         <Modal
           visible={repeatModalVisible}
           transparent
           animationType="fade"
           onRequestClose={() => setRepeatModalVisible(false)}
         >
-          <Pressable
-            style={styles.modalMask}
-            onPress={() => setRepeatModalVisible(false)}
-          />
+          <Pressable style={styles.modalMask} onPress={() => setRepeatModalVisible(false)} />
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>重复</Text>
             {[
@@ -599,7 +551,7 @@ export default function EventEditModal() {
           </View>
         </Modal>
 
-        {/* 隐藏字段：保留 date/time state（不显示） */}
+        {/* Hidden fields */}
         <View style={styles.hidden}>
           <TextInput value={startDate} onChangeText={setStartDate} />
           <TextInput value={startTime} onChangeText={setStartTime} />
@@ -649,12 +601,10 @@ const styles = StyleSheet.create({
     color: "#111",
     fontWeight: "700",
   },
-
   page: {
     paddingTop: 6,
     gap: 14,
   },
-
   nav: {
     flexDirection: "row",
     alignItems: "center",
@@ -676,7 +626,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#111",
   },
-
   categoryRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -700,14 +649,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#6B6B6B",
   },
-
   titleInput: {
     fontSize: 26,
     fontWeight: "600",
     paddingVertical: 10,
     color: "#111",
   },
-
   list: {
     gap: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -738,7 +685,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAEAEA",
     marginTop: 2,
   },
-
   noteInput: {
     paddingVertical: 18,
     fontSize: 18,
@@ -746,7 +692,6 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: "top",
   },
-
   hidden: {
     position: "absolute",
     left: -9999,

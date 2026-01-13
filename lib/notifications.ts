@@ -1,11 +1,282 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import dayjs from "dayjs";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
-import { CalendarEvent, getAllEvents, getDb } from "./database";
+import { AppState, Platform } from "react-native";
+import {
+  CalendarEvent,
+  getAllEvents,
+  getDb,
+  getEventsByDate,
+} from "./database";
 
 // 检测是否在 Expo Go 中运行
 const isExpoGo = Constants.appOwnership === "expo";
+
+const REMINDER_CATEGORY_ID = "calendar-reminder-actions";
+const STOP_REMINDING_ACTION_ID = "STOP_REMINDING";
+
+const DEFAULT_NAG_INTERVAL_MS = 5000;
+const DEFAULT_DUE_WATCH_INTERVAL_MS = 5000;
+const DEFAULT_MAX_NAG_DURATION_MIN = 60;
+
+const STOP_KEY_PREFIX = "stop-reminding:";
+
+type ActiveNag = {
+  timer: ReturnType<typeof setInterval>;
+  sending: boolean;
+  endAt: number; // epoch ms
+};
+
+let notificationCategoriesInitialized = false;
+const activeNags = new Map<string, ActiveNag>();
+const stoppedOccurrences = new Set<string>();
+
+let dueWatcherTimer: ReturnType<typeof setInterval> | null = null;
+let appStateSubscription: { remove: () => void } | null = null;
+let currentAppState = AppState.currentState;
+
+function getOccurrenceKey(eventId: string, date: string): string {
+  return `${eventId}:${date}`;
+}
+
+async function ensureNotificationCategoriesInitialized(): Promise<void> {
+  if (isExpoGo || notificationCategoriesInitialized) return;
+
+  try {
+    await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY_ID, [
+      {
+        identifier: STOP_REMINDING_ACTION_ID,
+        buttonTitle: "不再提醒",
+        options: {
+          opensAppToForeground: false,
+          isDestructive: true,
+        },
+      },
+    ]);
+    notificationCategoriesInitialized = true;
+  } catch (e) {
+    // 某些环境下可能不支持 category/action；不影响一次性提醒
+    console.warn("初始化通知动作失败:", e);
+  }
+}
+
+function buildEventDateTime(event: CalendarEvent): dayjs.Dayjs {
+  return event.time
+    ? dayjs(`${event.date} ${event.time}`, "YYYY-MM-DD HH:mm")
+    : dayjs(event.date, "YYYY-MM-DD").startOf("day").add(9, "hour");
+}
+
+function buildNotifyTime(event: CalendarEvent): dayjs.Dayjs {
+  const offset = event.remindOffsetMin ?? 0;
+  return buildEventDateTime(event).subtract(offset, "minute");
+}
+
+function buildNotificationTitle(event: CalendarEvent): string {
+  let title = "日程提醒";
+  switch (event.type) {
+    case "reminder":
+      title = "⏰ 提醒";
+      break;
+    case "schedule":
+      title = "📅 日程";
+      break;
+    case "course":
+      title = "📚 课程";
+      break;
+    case "countdown":
+      title = "⏳ 倒数日";
+      break;
+    case "birthday":
+      title = "🎂 生日";
+      break;
+    case "anniversary":
+      title = "💕 纪念日";
+      break;
+  }
+  return title;
+}
+
+function buildNotificationBody(event: CalendarEvent): string {
+  let body = event.title;
+  if (event.time) {
+    body = `${event.time} - ${event.title}`;
+  }
+  if ((event.remindOffsetMin ?? 0) > 0) {
+    body += `\n(提前${event.remindOffsetMin}分钟提醒)`;
+  }
+  return body;
+}
+
+async function isOccurrenceStopped(occurrenceKey: string): Promise<boolean> {
+  if (stoppedOccurrences.has(occurrenceKey)) return true;
+  try {
+    const v = await AsyncStorage.getItem(`${STOP_KEY_PREFIX}${occurrenceKey}`);
+    if (v === "1") {
+      stoppedOccurrences.add(occurrenceKey);
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+async function stopOccurrenceNag(
+  occurrenceKey: string,
+  persist: boolean
+): Promise<void> {
+  const active = activeNags.get(occurrenceKey);
+  if (active) {
+    clearInterval(active.timer);
+    activeNags.delete(occurrenceKey);
+  }
+
+  if (!persist) return;
+
+  stoppedOccurrences.add(occurrenceKey);
+  try {
+    await AsyncStorage.setItem(`${STOP_KEY_PREFIX}${occurrenceKey}`, "1");
+  } catch {
+    // ignore
+  }
+}
+
+export async function startEventNagging(
+  event: CalendarEvent,
+  options?: { intervalMs?: number; maxDurationMin?: number }
+): Promise<void> {
+  if (isExpoGo) return;
+
+  // 没设置提醒或设置为不提醒(-1)，不启动循环
+  if (event.remindOffsetMin === undefined || event.remindOffsetMin < 0) {
+    return;
+  }
+
+  await ensureNotificationCategoriesInitialized();
+
+  const occurrenceKey = getOccurrenceKey(event.id, event.date);
+  if (await isOccurrenceStopped(occurrenceKey)) return;
+  if (activeNags.has(occurrenceKey)) return;
+
+  const intervalMs = options?.intervalMs ?? DEFAULT_NAG_INTERVAL_MS;
+  const maxDurationMin =
+    options?.maxDurationMin ?? DEFAULT_MAX_NAG_DURATION_MIN;
+  const endAt = dayjs().add(maxDurationMin, "minute").valueOf();
+
+  const activeNag: ActiveNag = {
+    timer: setInterval(() => {
+      const now = Date.now();
+      if (now >= endAt) {
+        void stopOccurrenceNag(occurrenceKey, false);
+        return;
+      }
+
+      const slot = activeNags.get(occurrenceKey);
+      if (!slot || slot.sending) return;
+
+      slot.sending = true;
+      void (async () => {
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: buildNotificationTitle(event),
+              body: buildNotificationBody(event),
+              data: {
+                eventId: event.id,
+                date: event.date,
+                occurrenceKey,
+              },
+              sound: true,
+              categoryIdentifier: REMINDER_CATEGORY_ID,
+            },
+            trigger: null,
+          });
+        } catch {
+          // ignore
+        } finally {
+          const still = activeNags.get(occurrenceKey);
+          if (still) still.sending = false;
+        }
+      })();
+    }, intervalMs),
+    sending: false,
+    endAt,
+  };
+
+  activeNags.set(occurrenceKey, activeNag);
+}
+
+export async function stopEventNagging(
+  eventId: string,
+  date: string,
+  persist: boolean = true
+): Promise<void> {
+  if (isExpoGo) return;
+  const occurrenceKey = getOccurrenceKey(eventId, date);
+  await stopOccurrenceNag(occurrenceKey, persist);
+}
+
+// 前台“到点监听”：每 5 秒检查一次今天的事件；到提醒时间后启动 nagging
+export function startDueEventWatcher(options?: {
+  watchIntervalMs?: number;
+  nagIntervalMs?: number;
+  maxNagDurationMin?: number;
+}): void {
+  if (isExpoGo) return;
+  if (dueWatcherTimer) return;
+
+  const watchIntervalMs =
+    options?.watchIntervalMs ?? DEFAULT_DUE_WATCH_INTERVAL_MS;
+  const nagIntervalMs = options?.nagIntervalMs ?? DEFAULT_NAG_INTERVAL_MS;
+  const maxNagDurationMin =
+    options?.maxNagDurationMin ?? DEFAULT_MAX_NAG_DURATION_MIN;
+
+  const check = async () => {
+    if (currentAppState !== "active") return;
+
+    const db = getDb();
+    const today = dayjs().format("YYYY-MM-DD");
+    const events = await getEventsByDate(db, today);
+    const now = dayjs();
+
+    for (const event of events) {
+      if (event.remindOffsetMin === undefined || event.remindOffsetMin < 0)
+        continue;
+
+      const notifyTime = buildNotifyTime(event);
+      const endTime = notifyTime.add(maxNagDurationMin, "minute");
+
+      if (now.isAfter(notifyTime) && now.isBefore(endTime)) {
+        await startEventNagging(event, {
+          intervalMs: nagIntervalMs,
+          maxDurationMin: maxNagDurationMin,
+        });
+      }
+    }
+  };
+
+  appStateSubscription = AppState.addEventListener("change", (state) => {
+    currentAppState = state;
+  });
+
+  dueWatcherTimer = setInterval(() => {
+    void check();
+  }, watchIntervalMs);
+
+  void check();
+}
+
+export function stopDueEventWatcher(): void {
+  if (dueWatcherTimer) {
+    clearInterval(dueWatcherTimer);
+    dueWatcherTimer = null;
+  }
+  if (appStateSubscription) {
+    appStateSubscription.remove();
+    appStateSubscription = null;
+  }
+}
 
 // 配置通知行为（本地通知，不需要推送令牌）
 if (!isExpoGo) {
@@ -54,6 +325,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
       });
     }
 
+    await ensureNotificationCategoriesInitialized();
+
     return true;
   } catch (error) {
     console.warn("通知权限请求失败:", error);
@@ -80,12 +353,10 @@ export async function scheduleEventNotification(
     return null;
   }
 
-  // 计算通知时间
-  const eventDateTime = event.time
-    ? dayjs(`${event.date} ${event.time}`, "YYYY-MM-DD HH:mm")
-    : dayjs(event.date, "YYYY-MM-DD").startOf("day").add(9, "hour"); // 如果没有时间，默认早上9点
+  await ensureNotificationCategoriesInitialized();
 
-  const notifyTime = eventDateTime.subtract(event.remindOffsetMin, "minute");
+  // 计算通知时间
+  const notifyTime = buildNotifyTime(event);
 
   // 如果通知时间已过，不安排
   if (notifyTime.isBefore(dayjs())) {
@@ -95,45 +366,18 @@ export async function scheduleEventNotification(
   // 先取消之前的通知（如果有）
   await cancelEventNotification(event.id);
 
-  // 构建通知标题
-  let title = "日程提醒";
-  switch (event.type) {
-    case "reminder":
-      title = "⏰ 提醒";
-      break;
-    case "schedule":
-      title = "📅 日程";
-      break;
-    case "course":
-      title = "📚 课程";
-      break;
-    case "countdown":
-      title = "⏳ 倒数日";
-      break;
-    case "birthday":
-      title = "🎂 生日";
-      break;
-    case "anniversary":
-      title = "💕 纪念日";
-      break;
-  }
-
-  // 构建通知内容
-  let body = event.title;
-  if (event.time) {
-    body = `${event.time} - ${event.title}`;
-  }
-  if (event.remindOffsetMin > 0) {
-    body += `\n(提前${event.remindOffsetMin}分钟提醒)`;
-  }
+  const title = buildNotificationTitle(event);
+  const body = buildNotificationBody(event);
+  const occurrenceKey = getOccurrenceKey(event.id, event.date);
 
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
-        data: { eventId: event.id, date: event.date },
+        data: { eventId: event.id, date: event.date, occurrenceKey },
         sound: true,
+        categoryIdentifier: REMINDER_CATEGORY_ID,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -157,7 +401,7 @@ export async function cancelEventNotification(eventId: string): Promise<void> {
   if (isExpoGo) {
     return;
   }
-  
+
   try {
     await Notifications.cancelScheduledNotificationAsync(
       getNotificationId(eventId)
@@ -172,7 +416,7 @@ export async function cancelAllNotifications(): Promise<void> {
   if (isExpoGo) {
     return;
   }
-  
+
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
@@ -183,7 +427,7 @@ export async function getScheduledNotifications(): Promise<
   if (isExpoGo) {
     return [];
   }
-  
+
   return await Notifications.getAllScheduledNotificationsAsync();
 }
 
@@ -273,10 +517,28 @@ export function addNotificationResponseListener(
   }
 
   return Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data;
-    if (data?.eventId) {
-      callback(data.eventId as string, data.date as string);
-    }
+    void (async () => {
+      const data = response.notification.request.content.data;
+      const actionId = response.actionIdentifier;
+
+      // 点击了“不再提醒”按钮：停止当前事件(当天)的循环提醒
+      if (
+        actionId === STOP_REMINDING_ACTION_ID &&
+        data?.eventId &&
+        data?.date
+      ) {
+        const occurrenceKey =
+          (data as any)?.occurrenceKey ??
+          getOccurrenceKey(String(data.eventId), String(data.date));
+        await stopOccurrenceNag(String(occurrenceKey), true);
+        return;
+      }
+
+      // 默认点击：按原逻辑跳转
+      if (data?.eventId) {
+        callback(data.eventId as string, data.date as string);
+      }
+    })();
   });
 }
 

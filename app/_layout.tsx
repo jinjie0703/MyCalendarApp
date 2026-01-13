@@ -1,7 +1,7 @@
 import {
-    DarkTheme,
-    DefaultTheme,
-    ThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
 } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,13 +11,15 @@ import "react-native-reanimated";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { SettingsProvider, useSettings } from "@/hooks/useSettings";
 import {
-    addNotificationResponseListener,
-    requestNotificationPermission,
-    scheduleAllEventNotifications,
+  addNotificationResponseListener,
+  requestNotificationPermission,
+  scheduleAllEventNotifications,
+  startDueEventWatcher,
+  stopDueEventWatcher,
 } from "@/lib/notifications";
 import {
-    initSubscriptionTable,
-    syncAllSubscriptions,
+  initSubscriptionTable,
+  syncAllSubscriptions,
 } from "@/lib/subscription";
 
 export default function RootLayout() {
@@ -49,8 +51,9 @@ function RootLayoutContent() {
         const hasPermission = await requestNotificationPermission();
         if (hasPermission) {
           await scheduleAllEventNotifications();
+          startDueEventWatcher();
         }
-      } catch (error) {
+      } catch {
         // 在 Expo Go 中忽略通知相关错误
         console.log("通知功能在 Expo Go 中不可用，已跳过");
       }
@@ -59,8 +62,8 @@ function RootLayoutContent() {
       try {
         await initSubscriptionTable();
         await syncAllSubscriptions();
-      } catch (error) {
-        console.error("初始化订阅失败:", error);
+      } catch {
+        console.error("初始化订阅失败");
       }
     };
 
@@ -75,7 +78,7 @@ function RootLayoutContent() {
           params: { id: eventId, date },
         });
       });
-    } catch (error) {
+    } catch {
       // 在 Expo Go 中忽略
       console.log("通知监听器在 Expo Go 中不可用");
     }
@@ -84,6 +87,7 @@ function RootLayoutContent() {
       if (subscription && typeof subscription.remove === "function") {
         subscription.remove();
       }
+      stopDueEventWatcher();
     };
   }, [router]);
 
