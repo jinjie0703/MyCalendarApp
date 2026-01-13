@@ -16,6 +16,7 @@ interface Props {
   events: CalendarEvent[];
   onEventPress: (event: CalendarEvent) => void;
   onEventDelete: (id: string) => void;
+  onAddEvent: () => void;
 }
 
 export function EventSection({
@@ -23,6 +24,7 @@ export function EventSection({
   events,
   onEventPress,
   onEventDelete,
+  onAddEvent,
 }: Props) {
   return (
     <View style={styles.container}>
@@ -33,7 +35,7 @@ export function EventSection({
       </View>
 
       {events.length === 0 ? (
-        <EmptyEvents onAddEvent={() => {}} />
+        <EmptyEvents onAddEvent={onAddEvent} />
       ) : (
         <EventList
           events={events}

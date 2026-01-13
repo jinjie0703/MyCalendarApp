@@ -1,21 +1,33 @@
 import dayjs from "dayjs";
+import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { CalendarEvent, getAllEvents, getDb } from "./database";
 
+// 检测是否在 Expo Go 中运行
+const isExpoGo = Constants.appOwnership === "expo";
+
 // 配置通知行为（本地通知，不需要推送令牌）
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+if (!isExpoGo) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 // 请求通知权限（仅本地通知，不请求推送令牌）
 export async function requestNotificationPermission(): Promise<boolean> {
+  // 在 Expo Go 中跳过通知功能
+  if (isExpoGo) {
+    console.log("在 Expo Go 中运行，通知功能已禁用");
+    return false;
+  }
+
   try {
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
@@ -44,9 +56,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
     return true;
   } catch (error) {
-    // 在 Expo Go 中可能会有推送通知相关的警告，但本地通知仍然可用
-    console.warn("通知权限请求警告（本地通知仍可用）:", error);
-    return true;
+    console.warn("通知权限请求失败:", error);
+    return false;
   }
 }
 
@@ -59,6 +70,11 @@ function getNotificationId(eventId: string): string {
 export async function scheduleEventNotification(
   event: CalendarEvent
 ): Promise<string | null> {
+  // 在 Expo Go 中跳过
+  if (isExpoGo) {
+    return null;
+  }
+
   // 如果没有设置提醒或设置为不提醒(-1)，不安排通知
   if (event.remindOffsetMin === undefined || event.remindOffsetMin < 0) {
     return null;
@@ -138,6 +154,10 @@ export async function scheduleEventNotification(
 
 // 取消单个事件的通知
 export async function cancelEventNotification(eventId: string): Promise<void> {
+  if (isExpoGo) {
+    return;
+  }
+  
   try {
     await Notifications.cancelScheduledNotificationAsync(
       getNotificationId(eventId)
@@ -149,6 +169,10 @@ export async function cancelEventNotification(eventId: string): Promise<void> {
 
 // 取消所有通知
 export async function cancelAllNotifications(): Promise<void> {
+  if (isExpoGo) {
+    return;
+  }
+  
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
@@ -156,11 +180,20 @@ export async function cancelAllNotifications(): Promise<void> {
 export async function getScheduledNotifications(): Promise<
   Notifications.NotificationRequest[]
 > {
+  if (isExpoGo) {
+    return [];
+  }
+  
   return await Notifications.getAllScheduledNotificationsAsync();
 }
 
 // 为所有未来事件安排通知（应用启动时调用）
 export async function scheduleAllEventNotifications(): Promise<void> {
+  if (isExpoGo) {
+    console.log("在 Expo Go 中运行，跳过通知安排");
+    return;
+  }
+
   try {
     const db = getDb();
     const events = await getAllEvents(db);
@@ -189,6 +222,10 @@ export async function scheduleRepeatingNotification(
   event: CalendarEvent,
   count: number = 10 // 默认为接下来10次重复安排通知
 ): Promise<void> {
+  if (isExpoGo) {
+    return;
+  }
+
   if (!event.repeatRule || event.repeatRule === "none") {
     await scheduleEventNotification(event);
     return;
@@ -230,7 +267,11 @@ export async function scheduleRepeatingNotification(
 // 添加通知点击监听器
 export function addNotificationResponseListener(
   callback: (eventId: string, date: string) => void
-): Notifications.EventSubscription {
+): Notifications.EventSubscription | null {
+  if (isExpoGo) {
+    return null;
+  }
+
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data;
     if (data?.eventId) {
@@ -242,6 +283,10 @@ export function addNotificationResponseListener(
 // 添加通知接收监听器
 export function addNotificationReceivedListener(
   callback: (notification: Notifications.Notification) => void
-): Notifications.EventSubscription {
+): Notifications.EventSubscription | null {
+  if (isExpoGo) {
+    return null;
+  }
+
   return Notifications.addNotificationReceivedListener(callback);
 }

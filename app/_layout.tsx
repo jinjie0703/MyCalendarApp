@@ -1,7 +1,7 @@
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider,
 } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,13 +11,13 @@ import "react-native-reanimated";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { SettingsProvider, useSettings } from "@/hooks/useSettings";
 import {
-  addNotificationResponseListener,
-  requestNotificationPermission,
-  scheduleAllEventNotifications,
+    addNotificationResponseListener,
+    requestNotificationPermission,
+    scheduleAllEventNotifications,
 } from "@/lib/notifications";
 import {
-  initSubscriptionTable,
-  syncAllSubscriptions,
+    initSubscriptionTable,
+    syncAllSubscriptions,
 } from "@/lib/subscription";
 
 export default function RootLayout() {
@@ -44,15 +44,15 @@ function RootLayoutContent() {
   // 初始化通知服务和订阅
   useEffect(() => {
     const init = async () => {
+      // 初始化通知（在 Expo Go 中会被跳过）
       try {
-        // 初始化通知（本地通知在 Expo Go 中可用）
         const hasPermission = await requestNotificationPermission();
         if (hasPermission) {
           await scheduleAllEventNotifications();
         }
       } catch (error) {
-        // Expo Go 中可能会有推送通知相关警告，但不影响本地通知
-        console.warn("通知初始化警告:", error);
+        // 在 Expo Go 中忽略通知相关错误
+        console.log("通知功能在 Expo Go 中不可用，已跳过");
       }
 
       // 初始化订阅表并同步
@@ -67,7 +67,7 @@ function RootLayoutContent() {
     init();
 
     // 监听通知点击，跳转到对应事件
-    let subscription: any;
+    let subscription: any = null;
     try {
       subscription = addNotificationResponseListener((eventId, date) => {
         router.push({
@@ -76,11 +76,14 @@ function RootLayoutContent() {
         });
       });
     } catch (error) {
-      console.warn("通知监听器设置失败:", error);
+      // 在 Expo Go 中忽略
+      console.log("通知监听器在 Expo Go 中不可用");
     }
 
     return () => {
-      subscription?.remove?.();
+      if (subscription && typeof subscription.remove === "function") {
+        subscription.remove();
+      }
     };
   }, [router]);
 

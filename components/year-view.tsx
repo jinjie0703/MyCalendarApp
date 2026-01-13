@@ -1,8 +1,7 @@
-import React, { useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable } from "react-native";
-import dayjs from "dayjs";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
+import dayjs from "dayjs";
+import React, { useMemo } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 type YearViewProps = {
   /** 当前选中的日期，格式 YYYY-MM-DD */
@@ -88,8 +87,8 @@ export function YearView({ currentDate, onSelectDate }: YearViewProps) {
       // 确保每个月都有6行（42天）
       while (days.length < 42) {
         const day = days.length % 7 === 0 ? 1 : days[days.length - 1].day + 1;
-        const lastDate = dayjs(days[days.length - 1].date);
-        const nextDate = lastDate.add(1, 'day');
+        const lastDate: dayjs.Dayjs = dayjs(days[days.length - 1].date);
+        const nextDate: dayjs.Dayjs = lastDate.add(1, 'day');
         days.push({
           day: nextDate.date(),
           month: nextDate.month() + 1,

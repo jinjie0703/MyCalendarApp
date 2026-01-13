@@ -169,6 +169,7 @@ export default function CalendarScreen() {
             events={events}
             onEventPress={(event) => navigateToEventEdit(event.id, event.date)}
             onEventDelete={removeEvent}
+            onAddEvent={() => navigateToEventEdit()}
           />
 
           {/* 底部留白 */}

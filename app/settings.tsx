@@ -1,10 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Application from "expo-application";
-import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
@@ -130,36 +127,9 @@ export default function SettingsScreen() {
   const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
   const [ringtoneModalVisible, setRingtoneModalVisible] = useState(false);
-  const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [viewModeModalVisible, setViewModeModalVisible] = useState(false);
 
-  // 应用版本信息
-  const appVersion = useMemo(() => {
-    try {
-      return Application.nativeApplicationVersion || "1.0.0";
-    } catch {
-      return "1.0.0";
-    }
-  }, []);
 
-  const buildNumber = useMemo(() => {
-    try {
-      return Application.nativeBuildVersion || "1";
-    } catch {
-      return "1";
-    }
-  }, []);
-
-  // 设备时区
-  const deviceTimezone = useMemo(() => {
-    try {
-      return (
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai"
-      );
-    } catch {
-      return "Asia/Shanghai";
-    }
-  }, []);
 
   // 处理每周起始日切换
   const handleFirstDayChange = useCallback(() => {
@@ -274,29 +244,7 @@ export default function SettingsScreen() {
     ]);
   }, [resetAllSettings]);
 
-  // 复制应用信息
-  const handleCopyAppInfo = useCallback(async () => {
-    const info = `MyCalendarApp v${appVersion} (${buildNumber})\n系统时区: ${deviceTimezone}`;
-    await Clipboard.setStringAsync(info);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("已复制", "应用信息已复制到剪贴板");
-  }, [appVersion, buildNumber, deviceTimezone]);
 
-  // 发送反馈邮件
-  const handleSendFeedback = useCallback(() => {
-    const email = "feedback@example.com";
-    const subject = encodeURIComponent(`MyCalendarApp 反馈 (v${appVersion})`);
-    const body = encodeURIComponent(
-      `\n\n---\n应用版本: ${appVersion}\n构建号: ${buildNumber}\n系统时区: ${deviceTimezone}`
-    );
-    Linking.openURL(`mailto:${email}?subject=${subject}&body=${body}`);
-  }, [appVersion, buildNumber, deviceTimezone]);
-
-  // 评分应用
-  const handleRateApp = useCallback(() => {
-    // 这里可以替换为实际的应用商店链接
-    Alert.alert("感谢支持", "应用商店链接功能待实现");
-  }, []);
 
   // 统计信息
   const [eventCount, setEventCount] = useState<number | null>(null);
@@ -471,42 +419,6 @@ export default function SettingsScreen() {
               />
             </Card>
           </Section>
-
-          {/* 关于 */}
-          <Section title="关于" icon="information-circle-outline">
-            <Card>
-              <SettingsItem
-                title="版本"
-                description={`当前版本 v${appVersion} (${buildNumber})`}
-                rightLabel=""
-                onPress={handleCopyAppInfo}
-              />
-              <Divider />
-              <SettingsItem
-                title="发送反馈"
-                description="告诉我们您的想法和建议"
-                onPress={handleSendFeedback}
-                showArrow
-              />
-              <Divider />
-              <SettingsItem
-                title="给个好评"
-                description="如果您喜欢这个应用，请支持我们"
-                onPress={handleRateApp}
-                showArrow
-              />
-            </Card>
-          </Section>
-
-          {/* 底部信息 */}
-          <View style={styles.footer}>
-            <ThemedText style={styles.footerText}>
-              MyCalendarApp © 2025
-            </ThemedText>
-            <ThemedText style={styles.footerText}>
-              系统时区: {deviceTimezone}
-            </ThemedText>
-          </View>
         </ThemedView>
       </ParallaxScrollView>
 
@@ -633,15 +545,6 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.light.border,
     marginHorizontal: 16,
-  },
-  footer: {
-    alignItems: "center",
-    paddingTop: 20,
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
   },
   // Modal 样式
   modalOverlay: {
