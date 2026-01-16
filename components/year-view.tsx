@@ -1,7 +1,7 @@
 import { ThemedText } from "@/components/themed-text";
 import dayjs from "dayjs";
 import React, { useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Dimensions, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 type YearViewProps = {
   /** 当前选中的日期，格式 YYYY-MM-DD */
@@ -12,9 +12,13 @@ type YearViewProps = {
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
 const MONTH_NAMES = [
-  "一月", "二月", "三月", "四月", "五月", "六月",
-  "七月", "八月", "九月", "十月", "十一月", "十二月"
+  "1月", "2月", "3月", "4月", "5月", "6月",
+  "7月", "8月", "9月", "10月", "11月", "12月"
 ] as const;
+
+// 获取屏幕宽度来决定布局
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const IS_TABLET = SCREEN_WIDTH >= 768;
 
 export function YearView({ currentDate, onSelectDate }: YearViewProps) {
   const currentDayjs = dayjs(currentDate);
@@ -86,7 +90,6 @@ export function YearView({ currentDate, onSelectDate }: YearViewProps) {
       
       // 确保每个月都有6行（42天）
       while (days.length < 42) {
-        const day = days.length % 7 === 0 ? 1 : days[days.length - 1].day + 1;
         const lastDate: dayjs.Dayjs = dayjs(days[days.length - 1].date);
         const nextDate: dayjs.Dayjs = lastDate.add(1, 'day');
         days.push({
@@ -107,7 +110,7 @@ export function YearView({ currentDate, onSelectDate }: YearViewProps) {
         isCurrentMonth: month === currentDayjs.month() + 1
       };
     });
-  }, [currentYear, isCurrentYear]);
+  }, [currentYear, isCurrentYear, currentDayjs, today]);
 
   const handleDayPress = (date: string) => {
     onSelectDate?.(date);
@@ -198,14 +201,14 @@ export function YearView({ currentDate, onSelectDate }: YearViewProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 12,
+    padding: 8,
   },
   yearHeader: {
-    marginBottom: 16,
+    marginBottom: 12,
     alignItems: 'center',
   },
   yearText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
   },
   monthsContainer: {
@@ -214,16 +217,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   monthContainer: {
-    width: '48%',
-    marginBottom: 20,
-    padding: 10,
-    borderRadius: 12,
+    width: IS_TABLET ? '24%' : '32%', // 平板4列，手机3列
+    marginBottom: 12,
+    padding: 6,
+    borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
   currentMonthContainer: {
     backgroundColor: 'rgba(161, 206, 220, 0.2)',
@@ -232,8 +235,8 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     textAlign: 'center',
-    marginBottom: 8,
-    fontSize: 16,
+    marginBottom: 4,
+    fontSize: IS_TABLET ? 14 : 12,
     fontWeight: '600',
   },
   currentMonthTitle: {
@@ -242,15 +245,15 @@ const styles = StyleSheet.create({
   },
   weekdaysRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   weekdayCell: {
     flex: 1,
     alignItems: 'center',
   },
   weekdayText: {
-    fontSize: 12,
-    opacity: 0.7,
+    fontSize: IS_TABLET ? 10 : 8,
+    opacity: 0.6,
   },
   daysGrid: {
     flexDirection: 'row',
@@ -258,14 +261,14 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: '14.28%', // 100% / 7
-    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 1,
   },
   dayButton: {
-    width: '80%',
-    aspectRatio: 1,
-    borderRadius: 20,
+    width: IS_TABLET ? 20 : 16,
+    height: IS_TABLET ? 20 : 16,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -280,7 +283,7 @@ const styles = StyleSheet.create({
     borderColor: '#A1CEDC',
   },
   dayText: {
-    fontSize: 12,
+    fontSize: IS_TABLET ? 10 : 8,
     textAlign: 'center',
   },
   selectedDayText: {
@@ -292,10 +295,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   otherMonthDay: {
-    opacity: 0.4,
+    opacity: 0.3,
   },
   otherMonthDayText: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   firstDayOfMonth: {
     fontWeight: '600',

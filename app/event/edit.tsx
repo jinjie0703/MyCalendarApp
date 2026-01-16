@@ -483,7 +483,7 @@ export default function EventEditModal() {
         >
           <Pressable style={styles.modalMask} onPress={() => setRemindModalVisible(false)} />
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>提醒</Text>
+            <Text style={styles.modalTitle}>提醒时间</Text>
             {[
               { label: "不提醒", value: -1 },
               { label: "任务发生时", value: 0 },
@@ -522,7 +522,7 @@ export default function EventEditModal() {
         >
           <Pressable style={styles.modalMask} onPress={() => setRepeatModalVisible(false)} />
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>重复</Text>
+            <Text style={styles.modalTitle}>重复时间</Text>
             {[
               { label: "不重复", value: "none" },
               { label: "每天", value: "daily" },

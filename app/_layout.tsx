@@ -1,7 +1,7 @@
 import {
-    DarkTheme,
-    DefaultTheme,
-    ThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
 } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,15 +11,17 @@ import "react-native-reanimated";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { SettingsProvider, useSettings } from "@/hooks/useSettings";
 import {
-    addNotificationResponseListener,
-    requestNotificationPermission,
-    scheduleAllEventNotifications,
-    startDueEventWatcher,
-    stopDueEventWatcher,
+  addNotificationReceivedListener,
+  addNotificationResponseListener,
+  requestNotificationPermission,
+  scheduleAllEventNotifications,
+  startDueEventWatcher,
+  stopDueEventWatcher
 } from "@/lib/notifications";
+import { scheduleAllSpecialReminders } from "@/lib/special-reminders";
 import {
-    initSubscriptionTable,
-    syncAllSubscriptions,
+  initSubscriptionTable,
+  syncAllSubscriptions,
 } from "@/lib/subscription";
 
 export default function RootLayout() {
@@ -71,22 +73,28 @@ function RootLayoutContent() {
     init();
 
     // 监听通知点击，跳转到对应事件
-    let subscription: any = null;
+    let responseSubscription: any = null;
+    let receivedSubscription: any = null;
     try {
-      subscription = addNotificationResponseListener((eventId, date) => {
+      responseSubscription = addNotificationResponseListener((eventId, date) => {
         router.push({
           pathname: "/event/edit",
           params: { id: eventId, date },
         });
       });
+      // 监听通知触发，启动循环提醒
+      receivedSubscription = addNotificationReceivedListener();
     } catch {
       // 在 Expo Go 中忽略
       console.log("通知监听器在 Expo Go 中不可用");
     }
 
     return () => {
-      if (subscription && typeof subscription.remove === "function") {
-        subscription.remove();
+      if (responseSubscription && typeof responseSubscription.remove === "function") {
+        responseSubscription.remove();
+      }
+      if (receivedSubscription && typeof receivedSubscription.remove === "function") {
+        receivedSubscription.remove();
       }
       stopDueEventWatcher();
     };

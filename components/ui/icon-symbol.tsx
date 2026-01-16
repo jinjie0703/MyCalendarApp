@@ -28,6 +28,10 @@ const MAPPING = {
   // Calendar header icons
   plus: "add",
   ellipsis: "more-horiz",
+
+  // Event item icons
+  trash: "delete",
+  clock: "access-time",
 } as IconMapping;
 
 /**

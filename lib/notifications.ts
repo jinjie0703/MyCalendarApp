@@ -7,7 +7,8 @@ import {
   CalendarEvent,
   getAllEvents,
   getDb,
-  getEventsByDate,
+  getEventById,
+  getEventsByDate
 } from "./database";
 
 // 检测是否在 Expo Go 中运行
@@ -606,10 +607,11 @@ export function addNotificationResponseListener(
     void (async () => {
       const data = response.notification.request.content.data;
       const actionId = response.actionIdentifier;
+      const notificationId = response.notification.request.identifier;
 
       console.log(`[Notification] 收到通知响应, actionId: ${actionId}`);
 
-      // 点击了"不再提醒"按钮：停止当前事件(当天)的循环提醒
+      // 点击了"不再提醒"按钮：停止当前事件(当天)的循环提醒，并清除通知栏
       if (actionId === STOP_REMINDING_ACTION_ID) {
         console.log(`[Notification] 用户点击了"不再提醒"按钮`);
         if (data?.eventId && data?.date) {
@@ -618,6 +620,15 @@ export function addNotificationResponseListener(
             getOccurrenceKey(String(data.eventId), String(data.date));
           console.log(`[Notification] 停止提醒: ${occurrenceKey}`);
           await stopOccurrenceNag(String(occurrenceKey), true);
+        }
+        // 清除通知栏中该事件的所有通知
+        try {
+          await Notifications.dismissNotificationAsync(notificationId);
+          // 同时清除所有已展示的通知（因为循环提醒会产生多条）
+          await Notifications.dismissAllNotificationsAsync();
+          console.log(`[Notification] 已清除通知栏通知`);
+        } catch (e) {
+          console.warn(`[Notification] 清除通知失败:`, e);
         }
         return;
       }
@@ -631,6 +642,12 @@ export function addNotificationResponseListener(
             getOccurrenceKey(String(data.eventId), String(data.date));
           await stopOccurrenceNag(String(occurrenceKey), true);
         }
+        // 清除通知栏
+        try {
+          await Notifications.dismissAllNotificationsAsync();
+        } catch (e) {
+          console.warn(`[Notification] 清除通知失败:`, e);
+        }
         // 继续执行回调跳转
         if (data?.eventId) {
           callback(data.eventId as string, data.date as string);
@@ -640,13 +657,39 @@ export function addNotificationResponseListener(
   });
 }
 
-// 添加通知接收监听器
+// 添加通知接收监听器 - 当通知触发时启动循环提醒
 export function addNotificationReceivedListener(
-  callback: (notification: Notifications.Notification) => void
+  callback?: (notification: Notifications.Notification) => void
 ): Notifications.EventSubscription | null {
   if (isExpoGo) {
     return null;
   }
 
-  return Notifications.addNotificationReceivedListener(callback);
+  return Notifications.addNotificationReceivedListener(async (notification) => {
+    const data = notification.request.content.data;
+    
+    console.log(`[Notification] 收到通知触发: ${notification.request.content.title}`);
+    
+    // 当通知触发时，启动循环提醒
+    if (data?.eventId && data?.date) {
+      const eventId = String(data.eventId);
+      
+      try {
+        const db = getDb();
+        const event = await getEventById(db, eventId);
+        
+        if (event && event.remindOffsetMin !== undefined && event.remindOffsetMin >= 0) {
+          console.log(`[Notification] 启动循环提醒: ${event.title}`);
+          await startEventNagging(event);
+        }
+      } catch (e) {
+        console.error(`[Notification] 启动循环提醒失败:`, e);
+      }
+    }
+    
+    // 调用用户回调
+    if (callback) {
+      callback(notification);
+    }
+  });
 }
