@@ -1,7 +1,7 @@
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider,
 } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,15 +11,15 @@ import "react-native-reanimated";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { SettingsProvider, useSettings } from "@/hooks/useSettings";
 import {
-  addNotificationResponseListener,
-  requestNotificationPermission,
-  scheduleAllEventNotifications,
-  startDueEventWatcher,
-  stopDueEventWatcher,
+    addNotificationResponseListener,
+    requestNotificationPermission,
+    scheduleAllEventNotifications,
+    startDueEventWatcher,
+    stopDueEventWatcher,
 } from "@/lib/notifications";
 import {
-  initSubscriptionTable,
-  syncAllSubscriptions,
+    initSubscriptionTable,
+    syncAllSubscriptions,
 } from "@/lib/subscription";
 
 export default function RootLayout() {
@@ -51,6 +51,7 @@ function RootLayoutContent() {
         const hasPermission = await requestNotificationPermission();
         if (hasPermission) {
           await scheduleAllEventNotifications();
+          await scheduleAllSpecialReminders(); // 安排节日/节气/上班日提醒
           startDueEventWatcher();
         }
       } catch {

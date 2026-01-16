@@ -3,15 +3,9 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-  ActionSheetIOS,
   Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
-  TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import ParallaxScrollView from "@/components/parallax-scroll-view";
@@ -22,94 +16,7 @@ import { Colors } from "@/constants/theme";
 import { useSettings } from "@/hooks/useSettings";
 import { deleteEvent, getAllEvents, getDb, initDatabase } from "@/lib/database";
 import { importEventsFromICS, shareICSFile } from "@/lib/ical";
-import {
-  CalendarViewMode,
-  calendarViewOptions,
-  DefaultReminder,
-  FirstDayOfWeek,
-  getReminderLabel,
-  getTimezoneLabel,
-  reminderOptions,
-  RingtoneOption,
-  ringtoneOptions,
-  timezoneOptions,
-} from "@/lib/settings";
-
-// 选择器 Modal 组件
-function PickerModal<T extends string>({
-  visible,
-  title,
-  options,
-  value,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  title: string;
-  options: { value: T; label: string }[];
-  value: T;
-  onSelect: (value: T) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable
-          style={styles.modalContent}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>{title}</ThemedText>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
-              <Ionicons
-                name="close"
-                size={24}
-                color={Colors.light.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalList}>
-            {options.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.modalOption,
-                  value === option.value && styles.modalOptionSelected,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onSelect(option.value);
-                  onClose();
-                }}
-              >
-                <ThemedText
-                  style={[
-                    styles.modalOptionText,
-                    value === option.value && styles.modalOptionTextSelected,
-                  ]}
-                >
-                  {option.label}
-                </ThemedText>
-                {value === option.value && (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={Colors.light.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
+import { updateSpecialReminders } from "@/lib/special-reminders";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -122,49 +29,6 @@ export default function SettingsScreen() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-
-  // Modal 状态
-  const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
-  const [reminderModalVisible, setReminderModalVisible] = useState(false);
-  const [ringtoneModalVisible, setRingtoneModalVisible] = useState(false);
-  const [viewModeModalVisible, setViewModeModalVisible] = useState(false);
-
-
-
-  // 处理每周起始日切换
-  const handleFirstDayChange = useCallback(() => {
-    const options = [
-      { text: "周一", value: "monday" as FirstDayOfWeek },
-      { text: "周日", value: "sunday" as FirstDayOfWeek },
-    ];
-
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: "选择每周起始日",
-          options: [...options.map((o) => o.text), "取消"],
-          cancelButtonIndex: options.length,
-        },
-        (index) => {
-          if (index < options.length) {
-            Haptics.selectionAsync();
-            updateSettings({ firstDayOfWeek: options[index].value });
-          }
-        }
-      );
-    } else {
-      Alert.alert("每周起始日", "请选择", [
-        ...options.map((o) => ({
-          text: o.text,
-          onPress: () => {
-            Haptics.selectionAsync();
-            updateSettings({ firstDayOfWeek: o.value });
-          },
-        })),
-        { text: "取消", style: "cancel" },
-      ]);
-    }
-  }, [updateSettings]);
 
   // 导出事件
   const handleExport = async () => {
@@ -187,6 +51,9 @@ export default function SettingsScreen() {
     try {
       const result = await importEventsFromICS();
       Alert.alert(result.success ? "导入成功" : "导入失败", result.message);
+      if (result.success) {
+        await refreshEventCount();
+      }
     } catch (error) {
       Alert.alert("导入失败", String(error));
     } finally {
@@ -213,6 +80,7 @@ export default function SettingsScreen() {
               for (const event of events) {
                 await deleteEvent(db, event.id);
               }
+              setEventCount(0);
               Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Success
               );
@@ -248,19 +116,21 @@ export default function SettingsScreen() {
 
   // 统计信息
   const [eventCount, setEventCount] = useState<number | null>(null);
-  React.useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const db = getDb();
-        await initDatabase();
-        const events = await getAllEvents(db);
-        setEventCount(events.length);
-      } catch {
-        setEventCount(0);
-      }
-    };
-    loadStats();
+  
+  const refreshEventCount = useCallback(async () => {
+    try {
+      const db = getDb();
+      await initDatabase();
+      const events = await getAllEvents(db);
+      setEventCount(events.length);
+    } catch {
+      setEventCount(0);
+    }
   }, []);
+
+  React.useEffect(() => {
+    refreshEventCount();
+  }, [refreshEventCount]);
 
   return (
     <>
@@ -268,101 +138,40 @@ export default function SettingsScreen() {
         headerBackgroundColor={{ light: Colors.light.primary, dark: "#1a1a2e" }}
       >
         <ThemedView style={styles.container}>
-          {/* 外观 */}
-
-          {/* 通用 */}
-          <Section title="通用" icon="cog-outline">
-            <Card>
-              <SettingsItem
-                title="时区"
-                description="影响日程显示与提醒触发时间"
-                rightLabel={getTimezoneLabel(settings.timezone)}
-                onPress={() => setTimezoneModalVisible(true)}
-              />
-              <Divider />
-              <SettingsItem
-                title="每周起始日"
-                description="周视图/年视图的周排列顺序"
-                rightLabel={
-                  settings.firstDayOfWeek === "monday" ? "周一" : "周日"
-                }
-                onPress={handleFirstDayChange}
-              />
-              <Divider />
-              <SettingsItem
-                title="默认日历视图"
-                description="打开日历时默认显示的视图"
-                rightLabel={
-                  calendarViewOptions.find(
-                    (o) => o.value === settings.defaultCalendarView
-                  )?.label || "月视图"
-                }
-                onPress={() => setViewModeModalVisible(true)}
-              />
-            </Card>
-          </Section>
-
-          {/* 提醒 */}
-          <Section title="提醒" icon="notifications-outline">
-            <Card>
-              <SettingsItem
-                title="默认提醒方式"
-                description="新建事件时默认的提醒策略"
-                rightLabel={getReminderLabel(settings.defaultReminder)}
-                onPress={() => setReminderModalVisible(true)}
-              />
-              <Divider />
-              <SettingsItem
-                title="铃声"
-                description="事件提醒的提示音"
-                rightLabel={
-                  ringtoneOptions.find((o) => o.value === settings.ringtone)
-                    ?.label || "默认"
-                }
-                onPress={() => setRingtoneModalVisible(true)}
-              />
-              <Divider />
-              <SettingsItem
-                title="振动"
-                description="提醒时振动手机"
-                type="switch"
-                value={settings.vibrationEnabled}
-                onValueChange={(v) => updateSettings({ vibrationEnabled: v })}
-              />
-            </Card>
-          </Section>
-
           {/* 节日与节气 */}
           <Section title="节日与节气" icon="sunny-outline">
             <Card>
               <SettingsItem
                 title="节日提醒"
-                description="对传统/公历节日进行提醒"
+                description="节日前一天晚上9点提醒"
                 type="switch"
                 value={settings.festivalReminderEnabled}
-                onValueChange={(v) =>
-                  updateSettings({ festivalReminderEnabled: v })
-                }
+                onValueChange={(v) => {
+                  updateSettings({ festivalReminderEnabled: v });
+                  updateSpecialReminders();
+                }}
               />
               <Divider />
               <SettingsItem
                 title="节气提醒"
-                description="二十四节气提醒"
+                description="节气当天早上9点提醒"
                 type="switch"
                 value={settings.solarTermReminderEnabled}
-                onValueChange={(v) =>
-                  updateSettings({ solarTermReminderEnabled: v })
-                }
+                onValueChange={(v) => {
+                  updateSettings({ solarTermReminderEnabled: v });
+                  updateSpecialReminders();
+                }}
               />
               <Divider />
               <SettingsItem
-                title="法定节假日提醒"
-                description="包含放假/调休信息"
+                title="上班日提醒"
+                description="周日/周五晚上9点提醒"
                 type="switch"
-                value={settings.holidayReminderEnabled}
-                onValueChange={(v) =>
-                  updateSettings({ holidayReminderEnabled: v })
-                }
+                value={settings.workdayReminderEnabled}
+                onValueChange={(v) => {
+                  updateSettings({ workdayReminderEnabled: v });
+                  updateSpecialReminders();
+                }}
               />
             </Card>
           </Section>
@@ -421,50 +230,6 @@ export default function SettingsScreen() {
           </Section>
         </ThemedView>
       </ParallaxScrollView>
-
-      {/* 时区选择 Modal */}
-      <PickerModal
-        visible={timezoneModalVisible}
-        title="选择时区"
-        options={timezoneOptions}
-        value={settings.timezone}
-        onSelect={(v) => updateSettings({ timezone: v })}
-        onClose={() => setTimezoneModalVisible(false)}
-      />
-
-      {/* 提醒方式选择 Modal */}
-      <PickerModal
-        visible={reminderModalVisible}
-        title="默认提醒方式"
-        options={reminderOptions}
-        value={settings.defaultReminder}
-        onSelect={(v) =>
-          updateSettings({ defaultReminder: v as DefaultReminder })
-        }
-        onClose={() => setReminderModalVisible(false)}
-      />
-
-      {/* 铃声选择 Modal */}
-      <PickerModal
-        visible={ringtoneModalVisible}
-        title="选择铃声"
-        options={ringtoneOptions}
-        value={settings.ringtone}
-        onSelect={(v) => updateSettings({ ringtone: v as RingtoneOption })}
-        onClose={() => setRingtoneModalVisible(false)}
-      />
-
-      {/* 日历视图选择 Modal */}
-      <PickerModal
-        visible={viewModeModalVisible}
-        title="默认日历视图"
-        options={calendarViewOptions}
-        value={settings.defaultCalendarView}
-        onSelect={(v) =>
-          updateSettings({ defaultCalendarView: v as CalendarViewMode })
-        }
-        onClose={() => setViewModeModalVisible(false)}
-      />
     </>
   );
 }
@@ -512,7 +277,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 8,
   },
-
   section: {
     gap: 12,
   },
@@ -545,57 +309,5 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.light.border,
     marginHorizontal: 16,
-  },
-  // Modal 样式
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "60%",
-    paddingBottom: 34,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.light.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalList: {
-    paddingHorizontal: 20,
-  },
-  modalOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.light.borderLight,
-  },
-  modalOptionSelected: {
-    backgroundColor: Colors.light.surfaceSecondary,
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  modalOptionText: {
-    fontSize: 16,
-  },
-  modalOptionTextSelected: {
-    color: Colors.light.primary,
-    fontWeight: "600",
   },
 });

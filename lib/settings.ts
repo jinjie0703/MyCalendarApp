@@ -41,9 +41,9 @@ export interface AppSettings {
 
   // 节日与节气
   showLunarCalendar: boolean;
-  holidayReminderEnabled: boolean;
   solarTermReminderEnabled: boolean;
   festivalReminderEnabled: boolean;
+  workdayReminderEnabled: boolean; // 上班日提醒
 
   // 显示设置
   showWeekNumbers: boolean;
@@ -69,9 +69,9 @@ export const defaultSettings: AppSettings = {
 
   // 节日与节气
   showLunarCalendar: true,
-  holidayReminderEnabled: true,
   solarTermReminderEnabled: true,
   festivalReminderEnabled: true,
+  workdayReminderEnabled: true, // 上班日提醒
 
   // 显示
   showWeekNumbers: false,
