@@ -40,9 +40,22 @@ export function CalendarHeader({
 
     const today = dayjs().startOf("day");
     const diffDays = d.isValid() ? d.startOf("day").diff(today, "day") : 0;
-    const isToday = diffDays === 0;
 
-    return { month, year, monthName, weekday, isToday, diffDays };
+    // 计算相对日期文本
+    let relativeDateText = "";
+    if (diffDays === 0) {
+      relativeDateText = "今天";
+    } else if (diffDays === -1) {
+      relativeDateText = "昨天";
+    } else if (diffDays === 1) {
+      relativeDateText = "明天";
+    } else if (diffDays < 0) {
+      relativeDateText = `${Math.abs(diffDays)}天前`;
+    } else {
+      relativeDateText = `${diffDays}天后`;
+    }
+
+    return { month, year, monthName, weekday, diffDays, relativeDateText };
   }, [selectedDate]);
 
   return (
@@ -55,9 +68,10 @@ export function CalendarHeader({
         </View>
         <ThemedText style={styles.weekdayText}>
           {info.weekday}
-          {info.isToday && (
-            <ThemedText style={styles.todayBadge}> · 今天</ThemedText>
-          )}
+          <ThemedText style={styles.todayBadge}>
+            {" "}
+            · {info.relativeDateText}
+          </ThemedText>
         </ThemedText>
       </View>
 

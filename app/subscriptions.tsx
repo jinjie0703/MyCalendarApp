@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -53,6 +55,28 @@ export default function SubscriptionsScreen() {
   const [formColor, setFormColor] = useState(COLORS[0]);
   const [isValidating, setIsValidating] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // 监听键盘事件
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      },
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardHeight(0);
+      },
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   // 加载订阅列表
   const loadSubscriptions = async () => {
@@ -381,12 +405,16 @@ export default function SubscriptionsScreen() {
         transparent
         onRequestClose={closeModal}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={closeModal} />
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              keyboardHeight > 0 && {
+                marginBottom: keyboardHeight,
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>
                 {editingId ? "编辑订阅" : "添加订阅"}
@@ -403,6 +431,7 @@ export default function SubscriptionsScreen() {
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
               <View style={styles.inputGroup}>
                 <ThemedText style={styles.inputLabel}>日历名称</ThemedText>
@@ -474,7 +503,7 @@ export default function SubscriptionsScreen() {
               </Pressable>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </ParallaxScrollView>
   );
