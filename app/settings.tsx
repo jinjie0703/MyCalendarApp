@@ -2,11 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  View
-} from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { SettingsItem } from "@/components/settings-item";
@@ -20,11 +16,7 @@ import { updateSpecialReminders } from "@/lib/special-reminders";
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const {
-    settings,
-    updateSettings,
-    resetSettings: resetAllSettings,
-  } = useSettings();
+  const { settings, updateSettings } = useSettings();
 
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -82,7 +74,7 @@ export default function SettingsScreen() {
               }
               setEventCount(0);
               Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success
+                Haptics.NotificationFeedbackType.Success,
               );
               Alert.alert("完成", `已清除 ${events.length} 个事件`);
             } catch (error) {
@@ -92,31 +84,13 @@ export default function SettingsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   }, []);
 
-  // 重置设置
-  const handleResetSettings = useCallback(() => {
-    Alert.alert("重置设置", "将所有设置恢复为默认值，确定要继续吗？", [
-      { text: "取消", style: "cancel" },
-      {
-        text: "重置",
-        style: "destructive",
-        onPress: async () => {
-          await resetAllSettings();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert("完成", "设置已重置为默认值");
-        },
-      },
-    ]);
-  }, [resetAllSettings]);
-
-
-
   // 统计信息
   const [eventCount, setEventCount] = useState<number | null>(null);
-  
+
   const refreshEventCount = useCallback(async () => {
     try {
       const db = getDb();
@@ -213,18 +187,6 @@ export default function SettingsScreen() {
                 description="订阅网络日历（支持 iCal URL）"
                 onPress={() => router.push("/subscriptions")}
                 showArrow
-              />
-            </Card>
-          </Section>
-
-          {/* 其他 */}
-          <Section title="其他" icon="ellipsis-horizontal-outline">
-            <Card>
-              <SettingsItem
-                title="重置所有设置"
-                description="将所有设置恢复为默认值"
-                onPress={handleResetSettings}
-                destructive
               />
             </Card>
           </Section>

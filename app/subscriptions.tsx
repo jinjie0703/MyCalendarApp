@@ -41,7 +41,7 @@ const COLORS = [
 export default function SubscriptionsScreen() {
   const router = useRouter();
   const [subscriptions, setSubscriptions] = useState<CalendarSubscription[]>(
-    []
+    [],
   );
   const [isLoading, setIsLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -74,7 +74,7 @@ export default function SubscriptionsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadSubscriptions();
-    }, [])
+    }, []),
   );
 
   // 打开添加/编辑弹窗
@@ -168,7 +168,7 @@ export default function SubscriptionsScreen() {
             await loadSubscriptions();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -381,7 +381,11 @@ export default function SubscriptionsScreen() {
         transparent
         onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeModal} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>
@@ -396,76 +400,81 @@ export default function SubscriptionsScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>日历名称</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder="输入日历名称（可选）"
-                placeholderTextColor={Colors.light.textTertiary}
-                value={formName}
-                onChangeText={setFormName}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>日历 URL</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder="https://example.com/calendar.ics"
-                placeholderTextColor={Colors.light.textTertiary}
-                value={formUrl}
-                onChangeText={setFormUrl}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-            </View>
-
-            <ThemedText style={styles.colorLabel}>选择颜色</ThemedText>
-            <View style={styles.colorPicker}>
-              {COLORS.map((color) => (
-                <Pressable
-                  key={color}
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: color },
-                    formColor === color && styles.colorOptionSelected,
-                  ]}
-                  onPress={() => setFormColor(color)}
-                >
-                  {formColor === color && (
-                    <Ionicons name="checkmark" size={16} color="#fff" />
-                  )}
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              style={[
-                styles.saveButton,
-                isValidating && styles.saveButtonDisabled,
-              ]}
-              onPress={handleSave}
-              disabled={isValidating}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {isValidating && (
-                <Ionicons
-                  name="sync"
-                  size={18}
-                  color="#fff"
-                  style={{ marginRight: 8 }}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>日历名称</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="输入日历名称（可选）"
+                  placeholderTextColor={Colors.light.textTertiary}
+                  value={formName}
+                  onChangeText={setFormName}
                 />
-              )}
-              <ThemedText style={styles.saveButtonText}>
-                {isValidating
-                  ? "验证中..."
-                  : editingId
-                  ? "保存更改"
-                  : "添加并同步"}
-              </ThemedText>
-            </Pressable>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>日历 URL</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://example.com/calendar.ics"
+                  placeholderTextColor={Colors.light.textTertiary}
+                  value={formUrl}
+                  onChangeText={setFormUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+
+              <ThemedText style={styles.colorLabel}>选择颜色</ThemedText>
+              <View style={styles.colorPicker}>
+                {COLORS.map((color) => (
+                  <Pressable
+                    key={color}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: color },
+                      formColor === color && styles.colorOptionSelected,
+                    ]}
+                    onPress={() => setFormColor(color)}
+                  >
+                    {formColor === color && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable
+                style={[
+                  styles.saveButton,
+                  isValidating && styles.saveButtonDisabled,
+                ]}
+                onPress={handleSave}
+                disabled={isValidating}
+              >
+                {isValidating && (
+                  <Ionicons
+                    name="sync"
+                    size={18}
+                    color="#fff"
+                    style={{ marginRight: 8 }}
+                  />
+                )}
+                <ThemedText style={styles.saveButtonText}>
+                  {isValidating
+                    ? "验证中..."
+                    : editingId
+                      ? "保存更改"
+                      : "添加并同步"}
+                </ThemedText>
+              </Pressable>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ParallaxScrollView>
   );
@@ -668,12 +677,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
+  modalBackdrop: {
+    flex: 1,
+  },
   modalContent: {
     backgroundColor: Colors.light.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 40,
+    maxHeight: "85%",
   },
   modalHeader: {
     flexDirection: "row",
